@@ -84,6 +84,22 @@ TODO are for the team to fill in from real Playground sessions; do not submit a 
 - **Suggestion:** document the authorized boundary on the Image Snapshots page, give the error a stable
   `code`, and consider 416 for consistency with the other "no media" cases.
 
+## 8. "Latest snapshot" with a live session open returns 422 about a decryption key
+
+- **Task:** fetch the most recent frame while a live view was open on the Playground device.
+- **Steps:** `POST /v1/devices/{id}/media/image/download` with `{"type": "latest_in_range", "start_timestamp": now - 10 min}`,
+  a minute after an `on_demand` event whose `at_timestamp` snapshot had downloaded fine.
+- **Expected:** the latest frame, or a documented "no media" status (416 or 425).
+- **Actual:** `422` with the message "No valid Greco key available for decryption". "Greco" is not
+  mentioned anywhere in the public docs, and 422 is not listed for this endpoint.
+- **Severity:** Medium. The message reads like an internal fault and gives a developer nothing to act on. We
+  could not tell whether it means encrypted media, a recording still in progress, or a Playground limitation.
+- **Workaround:** treat a 422 mentioning decryption as "no usable media" and fall back to a frame captured
+  from the WHEP live view.
+- **Suggestion:** return a documented status and stable error code for unreadable media (the computer
+  vision guidelines already tell apps to expect it for encrypted devices), and keep internal names out of
+  the message.
+
 ---
 
 ## TODO (fill in from real Playground sessions)

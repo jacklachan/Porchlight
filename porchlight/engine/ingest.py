@@ -36,6 +36,9 @@ SAME_MOMENT_MS = 8_000
 IDLE_READ_GAP_MS = 10 * MINUTE_MS
 # A frame is only compared with a reading this recent; older than that, look again properly.
 UNCHANGED_MAX_AGE_MS = 6 * 60 * MINUTE_MS
+# Snapshots are requested at the live view's size. Ring's watermark is a fixed pixel size, so on a small
+# frame it covers much more of the picture and a snapshot stops looking like the live frame of the same porch.
+SNAPSHOT_SIZE = {"width": 1280, "height": 720}
 _HISTORY_TO_TYPE = {"motion": "motion", "ding": "ding", "on_demand": "on_demand"}
 _WEBHOOK_TO_TYPE = {"motion_detected": "motion", "button_press": "ding"}
 _EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp"}
@@ -259,9 +262,11 @@ class Ingest:
         """The snapshot at the event time, or failing that the latest one just after it."""
         now = self.clock.now_ms()
         try:
-            return await self.ring.snapshot_at(device_id, min(ts, now))
+            return await self.ring.snapshot_at(device_id, min(ts, now), **SNAPSHOT_SIZE)
         except MediaNotReady:
-            return await self.ring.latest_snapshot(device_id, ts - MINUTE_MS, min(ts + 2 * MINUTE_MS, now))
+            return await self.ring.latest_snapshot(
+                device_id, ts - MINUTE_MS, min(ts + 2 * MINUTE_MS, now), **SNAPSHOT_SIZE
+            )
 
     async def observe_frame(
         self,
@@ -350,10 +355,10 @@ class Ingest:
         now = self.clock.now_ms()
         self._last_porch_check_ms = now
         try:
-            media = await self.ring.latest_snapshot(device_id, now - 10 * MINUTE_MS, now)
+            media = await self.ring.latest_snapshot(device_id, now - 10 * MINUTE_MS, now, **SNAPSHOT_SIZE)
         except MediaNotReady:
             # Ring only serves media for times the app is authorized for; try just the last minute.
-            media = await self.ring.latest_snapshot(device_id, now - MINUTE_MS, now)
+            media = await self.ring.latest_snapshot(device_id, now - MINUTE_MS, now, **SNAPSHOT_SIZE)
         return await self.observe_frame(
             media.content, media.content_type, ts=now, frame_source=self._snapshot_source(), device_id=device_id
         )
