@@ -12,7 +12,7 @@ personal footage, say so on screen (Amazon's forum guidance: make clear which fo
 4. Add a contact (Mrs Rao, next-door neighbour) so the proposed action names a person.
 5. Real Ring has no time controls. To show "still outside" quickly, create the delivery with the **15 minutes** pickup limit
    and cut the wait out of the recording. Do not fake the clock on real Ring footage.
-6. The Playground device only produces events while a live view is open. In the dashboard press **Live view**
+6. In our Playground run the only event Ring recorded came from opening a live view. In the dashboard press **Live view**
    and tick **Keep watching** before you start the Package stream in the Playground.
 7. Tokens last about 30 minutes: record in one sitting, or paste a new token from the Ring pill between takes.
 

@@ -130,7 +130,8 @@ OpenAI-compatible endpoint, including a local one. Check it against a saved fram
 `python scripts/vision_check.py data/media/<frame>.jpg`. Without a model, each frame appears under
 **Needs you** for you to confirm.
 
-The Playground device only produces events while a live view is open, so on the Playground press
+In our Playground run the only event Ring recorded came from opening a live view (it arrives as
+`on_demand`), so on the Playground press
 **Live view** and tick **Keep watching**: Porchlight then looks every 20 seconds and reads a frame only
 when the porch has changed.
 
