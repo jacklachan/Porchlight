@@ -32,6 +32,15 @@ from .vision import build_vision
 log = logging.getLogger("porchlight")
 WEB_DIR = Path(__file__).parent / "web"
 MAX_FRAME_BYTES = 6 * 1024 * 1024
+# Pages and scripts are small and change between versions: always revalidate rather than show a stale UI.
+NO_CACHE = {"Cache-Control": "no-cache"}
+
+
+class FreshStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Any) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 class ExpectationIn(BaseModel):
@@ -244,15 +253,15 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
 
     @app.get("/", include_in_schema=False)
     async def index() -> FileResponse:
-        return FileResponse(WEB_DIR / "index.html")
+        return FileResponse(WEB_DIR / "index.html", headers=NO_CACHE)
 
     @app.get("/alexa", include_in_schema=False)
     async def alexa_page() -> FileResponse:
-        return FileResponse(WEB_DIR / "alexa.html")
+        return FileResponse(WEB_DIR / "alexa.html", headers=NO_CACHE)
 
     @app.get("/tv", include_in_schema=False)
     async def tv_page() -> FileResponse:
-        return FileResponse(WEB_DIR / "tv.html")
+        return FileResponse(WEB_DIR / "tv.html", headers=NO_CACHE)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, Any]:
@@ -608,6 +617,6 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
             ingest.changed()
             return {"ok": True}
 
-    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    app.mount("/static", FreshStaticFiles(directory=WEB_DIR), name="static")
     app.mount("/", mcp_app)
     return app

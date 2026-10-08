@@ -26,9 +26,10 @@
     .lamp .glass { fill: var(--glow); } .lamp path { stroke: #8c9abb; stroke-width: 2; stroke-linejoin: round; } .lamp .dark { fill: #0b1322; } .lamp .bracket { fill: none; stroke-width: 3; stroke-linecap: round; }
     .eyebrow { color: var(--dim); font-size: .95rem; }
     h1 { font: 700 2.7rem/1.1 "Bricolage Grotesque", system-ui, sans-serif; margin: .2rem 0 0; letter-spacing: -0.02em; text-wrap: balance; }
-    .frame { border-radius: 1.2rem; overflow: hidden; background: #0a111f; position: relative; min-height: 0; }
-    .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .frame .cap { position: absolute; left: 1rem; bottom: 1rem; background: rgba(10,17,31,.78); padding: .3rem .9rem; border-radius: 999px; font-size: .85rem; }
+    /* The frame is evidence: show all of it, never crop. The caption sits under it, not over it. */
+    .frame { border-radius: 1.2rem; overflow: hidden; background: #0a111f; position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+    .frame img { width: 100%; height: 100%; object-fit: contain; display: block; min-height: 0; }
+    .frame .cap { padding: .6rem 1rem; font-size: .9rem; background: #0a111f; }
     .frame .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); padding: 2rem; text-align: center; }
     .side { display: grid; gap: 2.4vh; align-content: start; min-height: 0; }
     .ask { background: var(--panel); border: 1px solid var(--line); border-left: .5rem solid var(--glow); border-radius: 1.2rem; padding: 1.3rem 1.5rem; display: grid; gap: .8rem; }
