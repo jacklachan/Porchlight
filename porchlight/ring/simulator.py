@@ -161,7 +161,7 @@ class SimState:
 
 
 def _require_bearer(authorization: str | None) -> None:
-    if not authorization or not authorization.startswith("Bearer ") or authorization == "Bearer expired":
+    if not authorization or not authorization.startswith("Bearer ") or authorization.startswith("Bearer expired"):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 

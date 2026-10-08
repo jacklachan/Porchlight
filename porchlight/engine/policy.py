@@ -42,7 +42,8 @@ RULES: dict[str, str] = {
     "action.rejected": "A family member rejected a proposed action.",
 }
 
-Notifier = Callable[[dict[str, Any]], None]
+# Called with an alert or an approved action. May return a sentence saying where it was sent.
+Notifier = Callable[[dict[str, Any]], str | None]
 
 
 class Policy:
@@ -461,10 +462,10 @@ class Policy:
                     new_alerts,
                     level="urgent",
                     rule_id="delivery.uncollected.escalate",
-                    title=f"{exp['title']}: uncollected for {fmt_duration(waited)}",
+                    title=f"{exp['title']}: still not brought in",
                     body=(
-                        f"Arrived at {self._t(exp['arrived_at'])} and still not brought in. "
-                        f"It may be worth checking that {name} is okay."
+                        f"It arrived at {self._t(exp['arrived_at'])} and was still out {fmt_duration(waited)} "
+                        f"later, more than twice as long as usual. It may be worth checking that {name} is okay."
                     ),
                     expectation_id=exp["id"],
                     evidence=evidence,
@@ -472,6 +473,19 @@ class Policy:
                     ts=now,
                 )
                 if alert:
+                    self.store.record(
+                        now,
+                        "policy",
+                        exp["id"],
+                        "escalated to urgent",
+                        rule_id="delivery.uncollected.escalate",
+                        evidence=evidence,
+                    )
+                    # The urgent alert replaces the earlier nudge rather than sitting beside it.
+                    self.store.execute(
+                        "UPDATE alerts SET state = 'resolved' WHERE dedupe_key = ? AND state != 'resolved'",
+                        [f"uncollected:{exp['id']}"],
+                    )
                     self._propose_check_in(exp, alert, waited)
 
     # -- transitions -----------------------------------------------------
@@ -644,7 +658,7 @@ class Policy:
         assert alert is not None
         new_alerts.append(alert)
         if self.notifier and level != "info":
-            self.notifier(alert)
+            self.notifier({"type": "alert", **alert})
         return alert
 
     def acknowledge_alert(self, alert_id: str, by: str) -> dict[str, Any] | None:
@@ -717,11 +731,42 @@ class Policy:
             return action
         now = self.clock.now_ms()
         status = "approved" if approve else "rejected"
+        if approve and result is None:
+            result = self._carry_out(action, by)
         self.store.update(
             "actions", action_id, {"status": status, "decided_by": by, "decided_at": now, "result": result}
         )
-        self.store.record(now, by, action_id, f"action {status}", rule_id=f"action.{status}")
+        self.store.record(
+            now, by, action_id, f"action {status}", rule_id=f"action.{status}", detail={"result": result}
+        )
         return self.store.get("actions", action_id)
+
+    def _carry_out(self, action: dict[str, Any], by: str) -> str:
+        """Runs only after a person approved. Returns a plain sentence about what happened."""
+        exp = self.store.get("expectations", action["expectation_id"]) if action["expectation_id"] else None
+        if action["kind"] == "reschedule":
+            if not exp:
+                return "Nothing to reschedule: the check-in no longer exists."
+            moved = self.add_expectation(
+                exp["title"],
+                exp["kind"],
+                exp["window_start"] + DAY_MS,
+                exp["window_end"] + DAY_MS,
+                collect_within_min=exp["collect_within_min"],
+                actor=by,
+                note=f"Rescheduled from {exp['id']}",
+            )
+            if exp["state"] in ("scheduled", "missed"):
+                self.cancel_expectation(exp["id"], actor=by)
+            if not moved:
+                return "Could not reschedule."
+            day = to_local(moved["window_start"], self.settings.timezone).strftime("%A")
+            return f"Moved to {day}, {self._t(moved['window_start'])} to {self._t(moved['window_end'])}."
+        contact = self.store.one("SELECT * FROM contacts ORDER BY rowid LIMIT 1")
+        sent = None
+        if self.notifier:
+            sent = self.notifier({"type": "action", "approved_by": by, "contact": contact, **action})
+        return sent or "Approved and recorded. No outbound channel is configured, so nobody was messaged."
 
     # -- reading the state -------------------------------------------------
 
