@@ -106,7 +106,9 @@ class SceneIn(BaseModel):
 def create_app(settings: Settings | None = None, *, clock: Clock | None = None, start_background: bool = True) -> FastAPI:
     settings = settings or Settings.from_env()
     store = Store(settings.db_path)
-    clock = clock or Clock(int(store.get_meta("clock_offset_ms", "0") or 0))
+    # The saved clock offset belongs to the stand-in's time controls. Against real Ring the clock is never shifted.
+    saved_offset = int(store.get_meta("clock_offset_ms", "0") or 0) if settings.demo else 0
+    clock = clock or Clock(saved_offset)
     notifier = WebhookNotifier(settings.notify_webhook_url)
     policy = Policy(store, clock, settings, notifier=notifier)
     ring = RingClient(
