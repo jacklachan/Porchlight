@@ -28,8 +28,8 @@ async def main() -> int:
     load_dotenv()
     settings = Settings.from_env()
     vision = build_vision(settings)
-    model = settings.bedrock_model_id if vision.name == "bedrock" else "-"
-    print(f"provider: {vision.name}   model: {model}   region: {settings.aws_region}")
+    model = getattr(vision, "model_id", None) or getattr(vision, "model", None) or "-"
+    print(f"provider: {vision.name}   model: {model}")
     content_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
     started = time.time()
     reading = await vision.read(path.read_bytes(), content_type)

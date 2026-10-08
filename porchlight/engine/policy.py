@@ -966,6 +966,14 @@ class Policy:
             tone, headline = "urgent", open_alerts[0]["title"]
         elif open_alerts:
             tone, headline = "attention", open_alerts[0]["title"]
+        elif any(i["state"] in ("overdue_pickup", "missed") for i in items):
+            # Acknowledging an alert does not make the problem go away: keep saying it until it is resolved.
+            first = next(i for i in items if i["state"] in ("overdue_pickup", "missed"))
+            tone = "attention"
+            if first["state"] == "overdue_pickup":
+                headline = f"{first['title']} is still on the porch."
+            else:
+                headline = f"{first['title']} has not been seen."
         elif not items:
             tone, headline = "quiet", f"Nothing is expected at {name}'s door today."
         elif done == len(items):

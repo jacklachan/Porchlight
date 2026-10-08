@@ -265,6 +265,12 @@ dialog::backdrop { background: rgba(15, 22, 38, .55); }
 .facts dt { color: var(--ink-2); }
 .facts dd { margin: 0; word-break: break-all; }
 
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10;
+  background: var(--night); color: #fff; padding: 12px 18px; border-radius: 12px; max-width: min(560px, calc(100vw - 32px));
+  box-shadow: 0 12px 40px rgba(15, 22, 38, .4); border-left: 5px solid var(--coral);
+}
+
 .foot { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; color: var(--ink-2); font-size: .85rem; padding: 22px 4px 8px; }
 
 @media (max-width: 900px) {

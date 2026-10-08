@@ -108,7 +108,7 @@ function render() {
   $("vision-note").textContent =
     v.provider === "none"
       ? "No vision model is connected, so every frame is held for you to confirm."
-      : `Frames are read by ${v.provider}${v.model ? ` (${v.model})` : ""}. Readings under ${Math.round(v.threshold * 100)}% confidence are held for you.`;
+      : `Frames are read by ${v.model || v.provider}. Readings under ${Math.round(v.threshold * 100)}% confidence are held for you.`;
   $("mcp-url").textContent = s.mcp_url;
 }
 
@@ -127,7 +127,7 @@ function renderRing() {
   $("ring-facts").innerHTML = [
     ["Talking to", c.simulated ? "the bundled local stand-in (not Ring)" : c.api_base],
     ["Device", c.device_name ? `${c.device_name}${c.device_online === false ? " (offline)" : c.device_online ? " (online)" : ""}` : "none found yet"],
-    ["Sign-in", c.auth_mode === "refresh_token" ? "OAuth refresh token" : c.auth_mode === "access_token" ? "Playground access token" : "no token"],
+    ["Sign-in", c.simulated ? "not needed for the stand-in" : c.auth_mode === "refresh_token" ? "OAuth refresh token" : c.auth_mode === "access_token" ? "Playground access token" : "no token"],
     ["Last checked", c.last_poll ? clock(c.last_poll) : "not yet"],
     ["Problem", c.last_error || "none"],
   ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
@@ -276,7 +276,7 @@ function readBy(o) {
   if (o.status === "unusable") return "Set aside without asking a model";
   if (o.provider === "unchanged") return "Porch unchanged, so the earlier reading stands (no model call)";
   if (o.provider === "none") return "Not read by a model";
-  return `Read by ${o.provider}${o.model ? ` (${o.model})` : ""}, ${Math.round(o.confidence * 100)}% sure`;
+  return `Read by ${o.model || o.provider}, ${Math.round(o.confidence * 100)}% sure`;
 }
 
 function renderDoor() {
@@ -339,7 +339,8 @@ async function renderLedger() {
   const { entries } = await api("/api/ledger?limit=40");
   $("ledger").innerHTML = entries
     .map((e) => `<li><time>${esc(clock(e.ts))}</time><div>${esc(e.what)} <span class="who">· ${esc(e.actor)}</span>
-      ${e.rule_id ? `<span class="rule"><code>${esc(e.rule_id)}</code> ${esc(e.rule || "")}</span>` : ""}</div></li>`)
+      ${e.rule_id ? `<span class="rule"><code>${esc(e.rule_id)}</code> ${esc(e.rule || "")}</span>` : ""}
+      ${e.detail && e.detail.result ? `<span class="rule">${esc(e.detail.result)}</span>` : ""}</div></li>`)
     .join("") || `<li><time></time><div class="hint">Nothing has happened yet.</div></li>`;
 }
 
@@ -451,14 +452,21 @@ async function captureLive(quiet = false) {
 
 // ---- actions ------------------------------------------------------------------
 
+let toastTimer = null;
+function toast(text) {
+  $("toast").textContent = text;
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ($("toast").hidden = true), 6000);
+}
+
 async function act(button, fn) {
   button.disabled = true;
   try {
     await fn();
     await refresh();
   } catch (err) {
-    doorMessage(err.message, true);
-    alert(err.message);
+    toast(err.message);
   } finally {
     button.disabled = false;
   }
@@ -470,7 +478,7 @@ document.addEventListener("click", (event) => {
   const d = b.dataset;
   if (d.open) return $(d.open).showModal();
   if ("close" in d) return b.closest("dialog").close();
-  if (d.evidence) return showEvidence(d.evidence).catch((e) => alert(e.message));
+  if (d.evidence) return showEvidence(d.evidence).catch((e) => toast(e.message));
   if (d.ack) return act(b, () => api(`/api/alerts/${d.ack}/ack`, { method: "POST", body: { by: me() } }));
   if (d.decide) return act(b, () => api(`/api/actions/${d.decide}/decide`, { method: "POST", body: { approve: d.approve === "1", by: me() } }));
   if (d.review) return act(b, () => api(`/api/observations/${d.review}/review`, { method: "POST", body: { package_present: d.package === "1", reviewer: me() } }));

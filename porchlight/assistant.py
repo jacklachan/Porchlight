@@ -195,7 +195,7 @@ class Assistant:
             if data.get("card") == "error":
                 return data["message"]
             item = data["check_ins"][0]
-            return f"Okay. I will watch for {item['title']} between {item['window']}, and tell you if it does not go to plan."
+            return f"Okay. I will watch for {item['title']} from {item['window']}, and tell you if it does not go to plan."
 
         if has("ask", "call", "neighbo", "knock", "check on", "someone to"):
             status = (await call("porch_status", {})).structured_content or {}
@@ -221,7 +221,7 @@ class Assistant:
             items = data.get("check_ins") or []
             if not items:
                 return "Nothing is expected tomorrow."
-            return "Tomorrow: " + "; ".join(f"{i['title']} between {i['window']}" for i in items) + "."
+            return "Tomorrow: " + "; ".join(f"{i['title']} from {i['window']}" for i in items) + "."
 
         if has("approv", "waiting", "request", "pending"):
             data = (await call("list_proposed_actions", {})).structured_content or {}
@@ -306,7 +306,7 @@ def _speak_status(data: dict[str, Any]) -> str:
             verb = "was brought in" if last["kind"] == "delivery" else "happened"
             parts.append(f"{last['title']} {verb} at {last['completed_at']}.")
         if upcoming:
-            parts.append(f"Next is {upcoming[0]['title']}, expected between {upcoming[0]['window']}.")
+            parts.append(f"Next is {upcoming[0]['title']}, expected from {upcoming[0]['window']}.")
     if data.get("proposed_actions"):
         parts.append("There is a request waiting for your approval on screen.")
     if data.get("needs_review"):
