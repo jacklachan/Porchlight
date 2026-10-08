@@ -94,7 +94,7 @@ class Policy:
         )
         if not created:
             return None
-        self.store.record(now, actor, exp_id, "expectation added", detail={"title": title, "kind": kind})
+        self.store.record(now, actor, exp_id, "check-in added", detail={"title": title, "kind": kind})
         return self.store.get("expectations", exp_id)
 
     def cancel_expectation(self, exp_id: str, actor: str = "family") -> dict[str, Any] | None:
@@ -104,7 +104,7 @@ class Policy:
         now = self.clock.now_ms()
         self.store.update("expectations", exp_id, {"state": "cancelled", "updated_at": now})
         self._resolve_for(exp_id, now)
-        self.store.record(now, actor, exp_id, "expectation cancelled")
+        self.store.record(now, actor, exp_id, "check-in cancelled")
         return self.store.get("expectations", exp_id)
 
     def add_plan(

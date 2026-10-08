@@ -1,1 +1,209 @@
-<!doctype html><title>Porchlight</title><p>placeholder</p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Porchlight on a smart display (simulated)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root { --night:#101a2e; --panel:#17233b; --line:#2c3c60; --ink:#f3f5fa; --dim:#aab5cf; --lamp:#f4ad3d; --good:#7fd1ae; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0a111f; color: var(--ink); font: 17px/1.5 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr; }
+    [hidden] { display: none !important; }
+    .banner { background: #2a2110; color: #ffd98c; font-size: .88rem; padding: 8px 18px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+    .banner a { color: inherit; }
+    .stage { display: grid; place-items: start center; padding: 22px 16px 28px; }
+    .device { width: min(980px, 100%); background: var(--night); border: 10px solid #05080f; border-radius: 28px; display: grid; grid-template-rows: 1fr auto; min-height: min(640px, calc(100vh - 110px)); overflow: hidden; }
+    .screen { padding: 22px 24px 8px; overflow-y: auto; max-height: calc(100vh - 250px); display: grid; gap: 18px; align-content: start; }
+    .hello h1 { font: 700 clamp(1.5rem, 3vw, 2.1rem)/1.15 "Bricolage Grotesque", system-ui, sans-serif; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .hello p { color: var(--dim); margin: 0; max-width: 56ch; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chips button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; font: inherit; font-size: .92rem; }
+    .chips button:hover { border-color: var(--lamp); }
+    .turn { display: grid; gap: 10px; }
+    .said { justify-self: end; background: #23345a; padding: 8px 14px; border-radius: 16px 16px 4px 16px; max-width: 80%; }
+    .spoken { font-size: 1.25rem; line-height: 1.4; max-width: 44ch; text-wrap: pretty; }
+    .spoken::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--lamp); margin-right: 10px; transform: translateY(-2px); }
+    iframe.card { width: min(560px, 100%); border: 0; height: 120px; background: transparent; color-scheme: dark; }
+    details.trace { color: var(--dim); font-size: .85rem; }
+    details.trace summary { cursor: pointer; }
+    details.trace pre { font: .78rem/1.45 "IBM Plex Mono", ui-monospace, Consolas, monospace; background: #0a111f; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; margin: 8px 0 0; }
+    form.ask { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--panel); align-items: center; }
+    form.ask input { font: inherit; color: var(--ink); background: #0f182b; border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; width: 100%; }
+    form.ask button { font: inherit; border-radius: 12px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+    form.ask button.send { background: var(--lamp); border-color: var(--lamp); color: #2a1c02; font-weight: 700; }
+    form.ask button.listening { border-color: var(--lamp); color: var(--lamp); }
+    form.ask button:disabled { opacity: .5; }
+    :focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
+    label.mute { color: var(--dim); font-size: .85rem; display: flex; gap: 6px; align-items: center; padding: 0 18px 12px; background: var(--panel); }
+    @media (max-width: 560px) { .screen { padding: 16px; } .spoken { font-size: 1.1rem; } form.ask { grid-template-columns: 1fr auto; } #mic { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <span><b>Simulated assistant.</b> This page plays the part of an Alexa+ style host. It is not an Amazon product and nothing here runs on Alexa.</span>
+    <a href="/">Back to the family dashboard</a>
+  </div>
+  <div class="stage">
+    <div class="device">
+      <div class="screen" id="screen" aria-live="polite">
+        <div class="hello" id="hello">
+          <h1>Ask about the front door.</h1>
+          <p>Each answer comes from Porchlight's MCP server over Streamable HTTP. The cards are MCP Apps served by that server and shown in a sandboxed frame.</p>
+          <div class="chips" id="chips">
+            <button type="button">How is Mom doing?</button>
+            <button type="button">Did the pharmacy delivery arrive?</button>
+            <button type="button">Why? Show me the evidence.</button>
+            <button type="button">Look at the porch now.</button>
+            <button type="button">Ask a neighbour to knock.</button>
+            <button type="button">Expect a meal delivery tomorrow between 1 and 2 pm.</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <form class="ask" id="ask">
+          <button type="button" id="mic" aria-label="Speak your question">Speak</button>
+          <input id="text" autocomplete="off" placeholder="Type or say a question" aria-label="Your question" maxlength="400">
+          <button class="send" type="submit">Ask</button>
+        </form>
+        <label class="mute"><input type="checkbox" id="voice" checked> Read answers aloud</label>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const screen = $("screen");
+const cardHtml = new Map();   // ui:// uri -> html
+const frames = new Map();     // iframe window -> { iframe, result }
+
+function authHeaders() {
+  const token = localStorage.getItem("pl_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+  return data;
+}
+async function loadCard(uri) {
+  if (!cardHtml.has(uri)) {
+    const res = await fetch(`/api/assistant/card?uri=${encodeURIComponent(uri)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error("Could not load the card");
+    cardHtml.set(uri, await res.text());
+  }
+  return cardHtml.get(uri);
+}
+
+// ---- the host side of MCP Apps ------------------------------------------------
+// The card runs in a sandboxed iframe with no network access and talks JSON-RPC over postMessage.
+window.addEventListener("message", async (event) => {
+  const entry = frames.get(event.source);
+  const msg = event.data;
+  if (!entry || !msg || msg.jsonrpc !== "2.0") return;
+  const reply = (payload) => event.source.postMessage({ jsonrpc: "2.0", id: msg.id, ...payload }, "*");
+
+  if (msg.method === "ui/initialize") {
+    reply({ result: {
+      protocolVersion: "2026-01-26",
+      hostInfo: { name: "porchlight-simulated-display", version: "0.1.0" },
+      hostCapabilities: { serverTools: {} },
+      hostContext: { theme: "dark", displayMode: "inline" },
+    } });
+  } else if (msg.method === "ui/notifications/initialized") {
+    event.source.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: entry.result }, "*");
+  } else if (msg.method === "ui/notifications/size-changed") {
+    entry.iframe.style.height = `${Math.min(1400, Math.ceil(msg.params.height) + 4)}px`;
+    screen.scrollTop = screen.scrollHeight;
+  } else if (msg.method === "tools/call") {
+    // A tap inside the card. The server only allows card tools through this route.
+    try {
+      const me = localStorage.getItem("pl_name") || "family";
+      const args = { ...msg.params.arguments, decided_by: me };
+      reply({ result: await post("/api/assistant/card-call", { name: msg.params.name, arguments: args }) });
+    } catch (err) {
+      reply({ error: { code: -32000, message: err.message } });
+    }
+  }
+});
+
+async function showCard(turn, call) {
+  const iframe = document.createElement("iframe");
+  iframe.className = "card";
+  iframe.title = `Porchlight card: ${call.name}`;
+  iframe.sandbox = "allow-scripts";
+  iframe.srcdoc = await loadCard(call.card_uri);
+  turn.append(iframe);
+  frames.set(iframe.contentWindow, { iframe, result: call.result });
+}
+
+// ---- turns --------------------------------------------------------------------
+
+function speak(text) {
+  if (!$("voice").checked || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+
+async function ask(text) {
+  text = text.trim();
+  if (!text) return;
+  $("hello").hidden = true;
+  const turn = document.createElement("div");
+  turn.className = "turn";
+  turn.innerHTML = `<div class="said">${esc(text)}</div><div class="spoken">…</div>`;
+  screen.append(turn);
+  screen.scrollTop = screen.scrollHeight;
+  $("ask").querySelector(".send").disabled = true;
+  try {
+    const reply = await post("/api/assistant", { text, speaker: localStorage.getItem("pl_name") || "family" });
+    turn.querySelector(".spoken").textContent = reply.speech;
+    speak(reply.speech);
+    const withCard = reply.tool_calls.filter((c) => c.card_uri && !c.result.isError);
+    if (withCard.length) await showCard(turn, withCard[withCard.length - 1]);
+    const trace = document.createElement("details");
+    trace.className = "trace";
+    const lines = reply.tool_calls.map((c) => `tools/call ${c.name} ${JSON.stringify(c.arguments)}${c.card_uri ? `\n  -> card ${c.card_uri}` : ""}`);
+    trace.innerHTML = `<summary>How this was answered: ${reply.tool_calls.length} tool call${reply.tool_calls.length === 1 ? "" : "s"} to the MCP server</summary>
+      <pre>${esc(`server ${reply.server} · MCP ${reply.protocol_version} · Streamable HTTP\ntool choice: ${reply.router}\n\n${lines.join("\n") || "(no tools called)"}`)}</pre>`;
+    turn.append(trace);
+  } catch (err) {
+    turn.querySelector(".spoken").textContent = `That did not work: ${err.message}`;
+  } finally {
+    $("ask").querySelector(".send").disabled = false;
+    screen.scrollTop = screen.scrollHeight;
+  }
+}
+
+$("ask").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const text = $("text").value;
+  $("text").value = "";
+  ask(text);
+});
+$("chips").addEventListener("click", (event) => {
+  if (event.target.tagName === "BUTTON") ask(event.target.textContent);
+});
+
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (Recognition) {
+  const recognition = new Recognition();
+  recognition.lang = "en-US";
+  recognition.onresult = (e) => ask(e.results[0][0].transcript);
+  recognition.onend = () => $("mic").classList.remove("listening");
+  recognition.onerror = () => $("mic").classList.remove("listening");
+  $("mic").addEventListener("click", () => {
+    speechSynthesis?.cancel();
+    $("mic").classList.add("listening");
+    try { recognition.start(); } catch { /* already listening */ }
+  });
+} else {
+  $("mic").hidden = true;
+}
+</script>
+</body>
+</html>

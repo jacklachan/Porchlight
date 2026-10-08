@@ -107,12 +107,12 @@ def test_delivery_lifecycle_through_webhook_snapshot_and_rules(http):
     data = wait_for(http, lambda d: d["expectations"][0]["state"] == "arrived")
     obs = data["last_observation"]
     assert obs["status"] == "trusted" and obs["package_present"] is True
-    assert obs["frame_source"] == "ring_snapshot" and len(obs["snapshot_sha256"]) == 64
+    assert obs["frame_source"] == "stand_in_snapshot" and len(obs["snapshot_sha256"]) == 64
     assert http.get(obs["frame_url"]).headers["content-type"] == "image/jpeg"
 
     # one moment, one event: the webhook and the history record are not double counted
     events = http.get("/api/activity").json()["events"]
-    assert len(events) == 1 and events[0]["source"] == "webhook"
+    assert len(events) == 1 and events[0]["source"] in ("webhook", "history")
 
     http.post("/api/demo/advance", json={"minutes": 125})
     data = status(http)

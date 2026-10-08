@@ -351,7 +351,7 @@ class PorchlightTools:
         )
 
     async def list_proposed_actions(self) -> types.CallToolResult:
-        rows = self.policy.store.query("SELECT * FROM actions ORDER BY ts DESC LIMIT 10")
+        rows = self.policy.store.query("SELECT * FROM actions WHERE status != 'withdrawn' ORDER BY ts DESC LIMIT 6")
         actions = [self._action(a) for a in rows]
         waiting = [a for a in actions if a["status"] == "proposed"]
         text = (

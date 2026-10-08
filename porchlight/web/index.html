@@ -1,1 +1,249 @@
-<!doctype html><title>Porchlight</title><p>placeholder</p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Porchlight</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="sky" id="sky" data-tone="quiet">
+    <div class="sky-inner">
+      <div class="lamp" aria-hidden="true">
+        <svg viewBox="0 0 64 88" width="64" height="88">
+          <path class="lamp-bracket" d="M32 2v12M18 14h28" />
+          <path class="lamp-cap" d="M20 14h24l6 14H14z" />
+          <path class="lamp-glass" d="M16 28h32l-5 34H21z" />
+          <path class="lamp-base" d="M21 62h22v6H21zM27 68h10v8H27z" />
+        </svg>
+      </div>
+      <div class="sky-text">
+        <p class="eyebrow"><span id="person">The front door</span> <span class="sep">·</span> <span id="asof"></span></p>
+        <h1 id="headline">Checking the door…</h1>
+      </div>
+      <div class="sky-side">
+        <button class="pill" id="ring-pill" type="button" aria-haspopup="dialog">
+          <span class="dot" id="ring-dot"></span><span id="ring-label">Ring</span>
+        </button>
+        <label class="you">You are
+          <input id="you" type="text" maxlength="40" placeholder="your name" autocomplete="given-name">
+        </label>
+        <a class="quiet-link" href="/alexa">Ask by voice</a>
+      </div>
+    </div>
+    <div class="day" id="day" aria-label="Today at the door">
+      <div class="day-track" id="day-track"></div>
+      <div class="day-hours" id="day-hours"></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="needs" id="needs" aria-live="polite" hidden>
+      <h2>Needs you</h2>
+      <div id="needs-list" class="needs-list"></div>
+    </section>
+
+    <div class="columns">
+      <div class="col-main">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Today</h2>
+            <button class="btn ghost" type="button" data-open="add-dialog">Expect something</button>
+          </div>
+          <ul class="checkins" id="checkins"></ul>
+          <p class="empty" id="checkins-empty" hidden>Nothing is expected today. Add a delivery or a visit and Porchlight will tell you if it does not go to plan.</p>
+          <div id="tomorrow-wrap" hidden>
+            <h3>Tomorrow</h3>
+            <ul class="checkins compact" id="tomorrow"></ul>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Regulars</h2>
+            <button class="btn ghost" type="button" data-open="plan-dialog">Add a regular one</button>
+          </div>
+          <ul class="plain-list" id="plans"></ul>
+          <p class="empty" id="plans-empty" hidden>No regular deliveries or visits yet.</p>
+          <div class="panel-head sub">
+            <h3>Who can check in</h3>
+            <button class="btn ghost" type="button" data-open="contact-dialog">Add a person</button>
+          </div>
+          <ul class="plain-list" id="contacts"></ul>
+          <p class="empty" id="contacts-empty" hidden>Add a neighbour or relative. If something looks wrong, Porchlight will suggest asking them to knock.</p>
+        </section>
+      </div>
+
+      <div class="col-side">
+        <section class="panel door">
+          <div class="panel-head">
+            <h2>At the door</h2>
+            <div class="row-actions">
+              <button class="btn ghost" type="button" id="live-btn">Live view</button>
+              <button class="btn" type="button" id="look-btn">Look now</button>
+            </div>
+          </div>
+          <figure class="frame" id="frame">
+            <video id="live" autoplay playsinline muted hidden></video>
+            <img id="frame-img" alt="" hidden>
+            <div class="frame-empty" id="frame-empty">No frame yet. Press <b>Look now</b> to ask the doorbell for one.</div>
+            <figcaption id="frame-cap"></figcaption>
+          </figure>
+          <p class="reading" id="reading"></p>
+          <div class="row-actions" id="live-actions" hidden>
+            <button class="btn" type="button" id="capture-btn">Read this frame</button>
+            <button class="btn ghost" type="button" id="live-stop">Stop live view</button>
+          </div>
+          <p class="hint" id="door-msg" role="status"></p>
+        </section>
+
+        <section class="panel stand-in" id="stand-in" hidden>
+          <div class="panel-head">
+            <h2>Stand-in controls</h2>
+            <span class="tag warn">not Ring</span>
+          </div>
+          <p class="hint">You are running against the bundled local stand-in. These buttons change what its drawn camera sees and move its clock.</p>
+          <div class="chips" id="scenes">
+            <button type="button" data-scene="delivery">Courier delivers</button>
+            <button type="button" data-scene="package">Package sits</button>
+            <button type="button" data-scene="pickup">Brought in</button>
+            <button type="button" data-scene="visitor" data-event="ding">Visitor rings</button>
+            <button type="button" data-scene="empty">Empty porch</button>
+          </div>
+          <div class="chips">
+            <button type="button" data-advance="30">+30 min</button>
+            <button type="button" data-advance="120">+2 hours</button>
+            <button type="button" id="reset-btn" class="danger">Start over</button>
+          </div>
+          <p class="hint" id="clock-note"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Record</h2>
+            <span class="hint">every change, and why</span>
+          </div>
+          <ol class="ledger" id="ledger"></ol>
+        </section>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <span id="vision-note"></span>
+      <span>Assistants connect at <code id="mcp-url"></code></span>
+    </footer>
+  </main>
+
+  <dialog id="add-dialog" class="sheet">
+    <form method="dialog" id="add-form">
+      <h2>Expect something at the door</h2>
+      <div class="seg" role="radiogroup" aria-label="What kind">
+        <label><input type="radio" name="kind" value="delivery" checked><span>A delivery</span></label>
+        <label><input type="radio" name="kind" value="visit"><span>A visit</span></label>
+      </div>
+      <label class="field">What is it?
+        <input name="title" required maxlength="80" placeholder="Pharmacy delivery">
+      </label>
+      <div class="field-row">
+        <label class="field">Day
+          <select name="day"><option value="">Today</option><option value="tomorrow ">Tomorrow</option></select>
+        </label>
+        <label class="field">From <input name="start" type="time" required></label>
+        <label class="field">To <input name="end" type="time" required></label>
+      </div>
+      <label class="field" id="collect-field">Tell me if it is still outside after
+        <select name="collect">
+          <option value="60">1 hour</option><option value="120">2 hours</option>
+          <option value="180" selected>3 hours</option><option value="360">6 hours</option>
+        </select>
+      </label>
+      <p class="form-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button class="btn" type="submit" value="ok">Start watching</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="plan-dialog" class="sheet">
+    <form method="dialog" id="plan-form">
+      <h2>Add a regular delivery or visit</h2>
+      <div class="seg" role="radiogroup" aria-label="What kind">
+        <label><input type="radio" name="kind" value="visit" checked><span>A visit</span></label>
+        <label><input type="radio" name="kind" value="delivery"><span>A delivery</span></label>
+      </div>
+      <label class="field">What is it?
+        <input name="title" required maxlength="80" placeholder="Home aide">
+      </label>
+      <div class="field-row">
+        <label class="field">How often
+          <select name="repeat">
+            <option value="daily">Every day</option><option value="weekdays">Weekdays</option>
+            <option value="weekly">Weekly, on today's weekday</option>
+          </select>
+        </label>
+        <label class="field">From <input name="start" type="time" required></label>
+        <label class="field">For
+          <select name="duration">
+            <option value="30">30 min</option><option value="60" selected>1 hour</option>
+            <option value="120">2 hours</option><option value="240">4 hours</option>
+          </select>
+        </label>
+      </div>
+      <p class="form-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button class="btn" type="submit" value="ok">Add it</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="contact-dialog" class="sheet">
+    <form method="dialog" id="contact-form">
+      <h2>Someone who can check in</h2>
+      <label class="field">Name <input name="name" required maxlength="60" placeholder="Mrs Rao"></label>
+      <label class="field">Who are they? <input name="role" maxlength="60" placeholder="Next-door neighbour"></label>
+      <label class="field">How to reach them <input name="channel" maxlength="120" placeholder="Phone or note for the family"></label>
+      <p class="form-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn ghost" type="button" data-close>Cancel</button>
+        <button class="btn" type="submit" value="ok">Add person</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="ring-dialog" class="sheet">
+    <form method="dialog" id="ring-form">
+      <h2>Ring connection</h2>
+      <dl class="facts" id="ring-facts"></dl>
+      <label class="field">Paste a new access token
+        <textarea name="token" rows="3" placeholder="From the Ring Developer Playground: Generate Token"></textarea>
+      </label>
+      <p class="hint">Playground tokens last about 30 minutes. The token is kept in memory only and is not written to disk.</p>
+      <p class="form-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button class="btn ghost" type="button" data-close>Close</button>
+        <button class="btn" type="submit" value="ok">Use this token</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="evidence-dialog" class="sheet wide">
+    <div class="receipt">
+      <div class="panel-head">
+        <h2 id="ev-title">Evidence</h2>
+        <button class="btn ghost" type="button" data-close>Close</button>
+      </div>
+      <p class="hint">Each change below names the rule that made it. Rules act only on frames a model read with enough confidence, or that a person confirmed.</p>
+      <ol class="steps" id="ev-steps"></ol>
+      <div class="ev-frames" id="ev-frames"></div>
+      <div id="ev-events"></div>
+    </div>
+  </dialog>
+
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>

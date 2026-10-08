@@ -196,6 +196,10 @@ class Ingest:
 
     # -- frames ------------------------------------------------------------
 
+    def _snapshot_source(self) -> str:
+        """Stand-in frames are never labelled as Ring footage."""
+        return "stand_in_snapshot" if "/sim" in self.ring.api_base else "ring_snapshot"
+
     def _save_frame(self, content: bytes, content_type: str) -> tuple[str, str]:
         digest = hashlib.sha256(content).hexdigest()
         ext = _EXT.get(content_type.split(";")[0].strip().lower(), "jpg")
@@ -224,7 +228,7 @@ class Ingest:
             media.content,
             media.content_type,
             ts=event["ts"],
-            frame_source="ring_snapshot",
+            frame_source=self._snapshot_source(),
             event_id=event_id,
             device_id=event["device_id"],
         )
@@ -269,7 +273,7 @@ class Ingest:
         media = await self.ring.latest_snapshot(device_id, now - 10 * MINUTE_MS, now)
         self._last_porch_check_ms = now
         return await self.observe_frame(
-            media.content, media.content_type, ts=now, frame_source="ring_snapshot", device_id=device_id
+            media.content, media.content_type, ts=now, frame_source=self._snapshot_source(), device_id=device_id
         )
 
     # -- evaluation and the background loop ----------------------------------

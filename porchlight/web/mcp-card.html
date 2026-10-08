@@ -1,1 +1,154 @@
-<!doctype html><title>Porchlight</title><p>placeholder</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porchlight card</title>
+<!--
+  MCP App for Porchlight tool results (served as ui://porchlight/card.html).
+  Self-contained: no network requests, so it runs inside a host's sandboxed iframe.
+  It speaks the MCP Apps postMessage protocol directly:
+    app  -> host  ui/initialize, ui/notifications/initialized, ui/notifications/size-changed, tools/call
+    host -> app   ui/notifications/tool-result
+-->
+<style>
+  :root { color-scheme: dark; --ink:#f3f5fa; --dim:#aab5cf; --panel:#1d2b49; --line:#34456b; --lamp:#f4ad3d; --good:#7fd1ae; --bad:#ff8f7c; --dusk:#aab0ec; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 14px; background: transparent; color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
+  h2 { font-size: 1.15rem; margin: 0 0 4px; line-height: 1.2; }
+  p { margin: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .body { padding: 14px 16px; display: grid; gap: 10px; }
+  .tone { height: 5px; background: var(--lamp); }
+  .tone.urgent { background: var(--bad); } .tone.attention { background: #ff9a4a; } .tone.quiet { background: #8c9abb; }
+  .dim { color: var(--dim); font-size: .88rem; }
+  img.frame { width: 100%; display: block; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  li.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .tag { font-size: .78rem; padding: 2px 9px; border-radius: 999px; background: #2c3b62; color: var(--dusk); white-space: nowrap; }
+  .tag.good { background: #1f4a3d; color: var(--good); } .tag.warn { background: #5a2a25; color: var(--bad); } .tag.wait { background: #55431c; color: var(--lamp); }
+  .alert { border-left: 4px solid #ff9a4a; padding-left: 10px; }
+  .alert.urgent { border-left-color: var(--bad); }
+  .step { border-left: 2px solid var(--line); padding-left: 10px; }
+  code { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: .78rem; background: #14203a; padding: 1px 5px; border-radius: 4px; }
+  .ask { background: #14203a; border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; border-radius: 10px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  button.go { background: var(--good); border-color: var(--good); color: #0f2a22; font-weight: 700; }
+  button:disabled { opacity: .5; cursor: progress; }
+  button:focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div id="root"><p class="dim">Waiting for Porchlight…</p></div>
+<script>
+(() => {
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const root = document.getElementById("root");
+  let nextId = 1;
+  const pending = new Map();
+
+  function send(message) { window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*"); }
+  function request(method, params) {
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      send({ id, method, params });
+    });
+  }
+  function notify(method, params) { send({ method, params }); }
+  function reportSize() {
+    notify("ui/notifications/size-changed", { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight });
+  }
+
+  const STATE = {
+    scheduled: ["Expected", ""], arrived: ["On the porch", "wait"], overdue_pickup: ["Still outside", "warn"],
+    completed: ["Done", "good"], missed: ["Not seen", "warn"], cancelled: ["Cancelled", ""],
+  };
+  const checkIns = (items) => `<ul>${items.map((i) => {
+    const [label, tone] = STATE[i.state] || [i.state, ""];
+    return `<li class="row"><span>${esc(i.title)}<br><span class="dim">${esc(i.window)}</span></span><span class="tag ${tone}">${esc(label)}</span></li>`;
+  }).join("")}</ul>`;
+  const alerts = (items) => items.map((a) => `<div class="alert ${a.level === "urgent" ? "urgent" : ""}">
+    <b>${esc(a.title)}</b><p>${esc(a.body)}</p><p class="dim"><code>${esc(a.rule_id)}</code> ${esc(a.rule || "")}</p></div>`).join("");
+  const actions = (items) => items.map((a) => a.status === "proposed"
+    ? `<div class="ask"><b>${esc(a.title)}</b>${a.detail ? `<p class="dim">${esc(a.detail)}</p>` : ""}
+        <p class="dim">Nothing is sent until you choose.</p>
+        <div class="buttons"><button class="go" data-action="${esc(a.id)}" data-approve="1">Yes, go ahead</button>
+        <button data-action="${esc(a.id)}" data-approve="0">Not now</button></div></div>`
+    : `<div class="ask"><b>${esc(a.title)}</b><p class="dim">${esc(a.status[0].toUpperCase() + a.status.slice(1))}${a.decided_by ? ` by ${esc(a.decided_by)}` : ""}. ${esc(a.result || "")}</p></div>`).join("");
+  const reading = (o) => o ? `<p>${esc(o.summary)}</p><p class="dim">${esc(o.at)} · ${esc(o.status === "needs_review" ? "held for a person to confirm" : `read by ${o.read_by}, ${Math.round(o.confidence * 100)}% sure`)}</p>` : "";
+
+  function render(result) {
+    const data = result.structuredContent || {};
+    const images = (result.content || []).filter((b) => b.type === "image").map((b) => `data:${b.mimeType};base64,${b.data}`);
+    const text = (result.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    let tone = "", body = "", frames = images;
+
+    if (data.card === "status") {
+      tone = data.tone;
+      body = `<h2>${esc(data.headline)}</h2><p class="dim">${esc(data.person_name)}'s front door · as of ${esc(data.as_of)}</p>`
+        + alerts(data.alerts || []) + actions(data.proposed_actions || [])
+        + (data.check_ins?.length ? checkIns(data.check_ins) : "") + reading(data.last_observation);
+    } else if (data.card === "evidence") {
+      body = `<h2>Evidence: ${esc(data.title)}</h2>` + (data.steps || []).map((s) => `<div class="step"><b>${esc(s.at)}</b> ${esc(s.what)}
+        ${s.rule_id ? `<p class="dim"><code>${esc(s.rule_id)}</code> ${esc(s.rule || "")}</p>` : ""}</div>`).join("")
+        + (data.observations || []).map((o) => `<p class="dim">Frame at ${esc(o.at)}: ${esc(o.summary)} <code>sha256 ${esc((o.frame_sha256 || "").slice(0, 16))}</code></p>`).join("");
+    } else if (data.card === "frame") {
+      body = `<h2>The porch just now</h2>` + reading(data.observation);
+    } else if (data.card === "actions") {
+      body = `<h2>Requests</h2>` + (actions(data.proposed_actions || []) || `<p class="dim">Nothing is waiting.</p>`);
+    } else if (data.card === "check_ins") {
+      body = `<h2>Check-ins${data.day ? ` · ${esc(data.day)}` : ""}</h2>` + checkIns(data.check_ins || []);
+    } else if (data.card === "alerts") {
+      body = `<h2>Alerts</h2>` + (alerts(data.alerts || []) || `<p class="dim">No open alerts.</p>`);
+    } else {
+      tone = result.isError ? "urgent" : "quiet";
+      body = `<p>${esc(data.message || text)}</p>`;
+    }
+    root.innerHTML = `<div class="card">${tone ? `<div class="tone ${esc(tone)}"></div>` : ""}
+      ${frames.map((src) => `<img class="frame" src="${src}" alt="Frame from the doorbell camera">`).join("")}
+      <div class="body">${body}</div></div>`;
+    root.querySelectorAll("img").forEach((img) => img.addEventListener("load", reportSize));
+    reportSize();
+  }
+
+  root.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    root.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      // decide_action is registered with visibility ["app"]: only this tap can reach it.
+      const result = await request("tools/call", {
+        name: "decide_action",
+        arguments: { action_id: button.dataset.action, approve: button.dataset.approve === "1" },
+      });
+      render(result);
+    } catch (err) {
+      root.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      root.insertAdjacentHTML("beforeend", `<p class="dim">Could not save that: ${esc(err.message || err)}</p>`);
+      reportSize();
+    }
+  });
+
+  window.addEventListener("message", (event) => {
+    const msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0" || event.source !== window.parent) return;
+    if (msg.id !== undefined && pending.has(msg.id)) {
+      const { resolve, reject } = pending.get(msg.id);
+      pending.delete(msg.id);
+      return msg.error ? reject(new Error(msg.error.message)) : resolve(msg.result);
+    }
+    if (msg.method === "ui/notifications/tool-result") render(msg.params);
+  });
+
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    appInfo: { name: "porchlight-card", version: "0.1.0" },
+    appCapabilities: {},
+  }).then(() => notify("ui/notifications/initialized", {}), () => {});
+  new ResizeObserver(reportSize).observe(document.body);
+})();
+</script>
+</body>
+</html>
