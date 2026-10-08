@@ -90,7 +90,7 @@ TODO are for the team to fill in from real Playground sessions; do not submit a 
 
 - **Playground token lifetime.** Did the ~30 minute expiry interrupt a session? How did the API report it (status code, error body)? Was the dashboard's "Ring needs a new token" state enough?
 - **Image download on the Playground device.** Does `at_timestamp` return a frame for a simulated Package / Vehicle / Motion event? Does `latest_in_range` work with no recent event? Record the exact status and error code if not.
-- **Event History on the Playground.** What `event_type` do the simulated events carry? (A forum post reports `on_demand` with empty detections.)
+- **Event History on the Playground.** Confirmed 8 Oct: the Package stream shows up as `event_type: on_demand` with no detection subtype, so an app cannot tell Package from Vehicle from Motion without its own vision. Write this up as an entry.
 - **WHEP live view.** Did the browser offer produce an answer first time? Any 500s?
 - **Bedrock.** Model access, quotas on a new account, latency per frame.
 - **Onboarding.** Time from "open developer.ring.com" to first successful API call.
