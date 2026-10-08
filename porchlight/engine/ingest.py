@@ -270,8 +270,12 @@ class Ingest:
         """Ask Ring for the most recent frame and read it, without waiting for motion."""
         device_id = await self.ensure_device()
         now = self.clock.now_ms()
-        media = await self.ring.latest_snapshot(device_id, now - 10 * MINUTE_MS, now)
         self._last_porch_check_ms = now
+        try:
+            media = await self.ring.latest_snapshot(device_id, now - 10 * MINUTE_MS, now)
+        except MediaNotReady:
+            # Ring only serves media for times the app is authorized for; try just the last minute.
+            media = await self.ring.latest_snapshot(device_id, now - MINUTE_MS, now)
         return await self.observe_frame(
             media.content, media.content_type, ts=now, frame_source=self._snapshot_source(), device_id=device_id
         )

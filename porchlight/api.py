@@ -25,7 +25,7 @@ from .db import Store, new_id
 from .engine import RULES, Ingest, Policy
 from .mcp_server import build_mcp, parse_when
 from .notify import WebhookNotifier
-from .ring import RingAuthError, RingClient, RingError, WebhookError, parse, verify_signature
+from .ring import MediaNotReady, RingAuthError, RingClient, RingError, WebhookError, parse, verify_signature
 from .ring import simulator as sim
 from .vision import build_vision
 
@@ -402,6 +402,14 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
     async def porch_check() -> dict[str, Any]:
         try:
             obs = await ingest.check_porch_now()
+        except MediaNotReady as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Ring has no stored frame for right now. Start Live view and press 'Read this frame', "
+                    f"or wait for the next event. ({exc})"
+                ),
+            ) from exc
         except RingAuthError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
         except RingError as exc:

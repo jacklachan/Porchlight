@@ -175,10 +175,10 @@ so this repository runs with no extra install step.
 ## What has and has not been verified
 
 - **Verified by the test suite and by hand:** everything above, end to end, against the local stand-in.
-- **Not yet verified against live Ring:** this code was written from Ring's published API documentation and
-  hello-world sample. Run `scripts/ring_check.py` with a Playground token to confirm device discovery,
-  Event History and image download behave as documented for your account, and note anything that differs
-  in [`FRICTION_LOG.md`](FRICTION_LOG.md).
+- **Partly verified against live Ring (Developer Playground, 8 October 2026):** device discovery, status,
+  capabilities and Event History work. Image download answered `403 Requested time range is not within
+  authorized boundaries` for a window with no events; Porchlight treats that as "no frame", not a bad token.
+  Still to confirm live: the snapshot for a real Playground event, WHEP live view, and webhooks.
 - **Not yet verified against live Bedrock:** the request and response shapes follow the Converse API; the
   response parser is unit-tested with recorded shapes, not a live call.
 

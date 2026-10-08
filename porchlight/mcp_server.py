@@ -27,7 +27,7 @@ from PIL import Image
 from . import __version__
 from .clock import DAY_MS, fmt_time, to_local, tz
 from .engine import RULES, Ingest, Policy
-from .ring import RingError
+from .ring import MediaNotReady, RingError
 
 CARD_URI = "ui://porchlight/card.html"
 WEB_DIR = Path(__file__).parent / "web"
@@ -300,6 +300,8 @@ class PorchlightTools:
     async def check_porch_now(self) -> types.CallToolResult:
         try:
             obs = await self.ingest.check_porch_now()
+        except MediaNotReady:
+            return _error("Ring has no stored frame for right now. A frame arrives with the next event at the door.")
         except RingError as exc:
             return _error(f"Could not get a frame from Ring: {exc}")
         seen = self._observation(obs)

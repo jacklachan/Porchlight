@@ -75,6 +75,13 @@ async def main() -> int:
             "latest snapshot in the last 10 minutes (image download, latest_in_range)",
             ring.latest_snapshot(device_id, now - 10 * 60_000, now),
         )
+        if frame is None:
+            frame = await step(
+                "latest snapshot in the last minute (image download, latest_in_range)",
+                ring.latest_snapshot(device_id, now - 60_000, now),
+            )
+        if frame is None and not history:
+            print("          No events yet: trigger Package, Vehicle or Motion in the Playground, then run this again.")
         if frame is None and history:
             frame = await step(
                 "snapshot at the newest event (image download, at_timestamp)",

@@ -68,6 +68,22 @@ TODO are for the team to fill in from real Playground sessions; do not submit a 
 - **Workaround:** built a small host (`/alexa`) that connects over Streamable HTTP and implements the MCP Apps postMessage handshake so cards render the way a real host would render them.
 - **Suggestion:** publish a reference "Alexa+ like" MCP host (even a static web page) with the card sizes, supported MCP Apps features and voice-response length limits, so teams build to the real constraints.
 
+## 7. Image download returns 403 for a window with no events, with an auth-shaped status
+
+- **Task:** fetch the most recent frame from the Playground device ("what does the porch look like now").
+- **Steps:** fresh Playground token; `GET /v1/devices` ok; Event History returned 0 events; then
+  `POST /v1/devices/{id}/media/image/download` with `{"type": "latest_in_range", "start_timestamp": now - 10 min}`.
+- **Expected:** an image, or `416 MEDIA_NOT_FOUND` as the Media docs describe for "no media".
+- **Actual:** `403` with "Requested time range is not within authorized boundaries". The Image Snapshots page
+  says timestamps must be "within last 180 days", and does not mention this error or what the authorized
+  boundary is (consent time? event windows?).
+- **Severity:** Medium. A 403 reads as "bad token", so a client that maps 401/403 to re-authentication
+  (ours did) tells the user to get a new token when the token is fine.
+- **Workaround:** treat a 403 whose message mentions the time range as "no media", and retry with a
+  one-minute window.
+- **Suggestion:** document the authorized boundary on the Image Snapshots page, give the error a stable
+  `code`, and consider 416 for consistency with the other "no media" cases.
+
 ---
 
 ## TODO (fill in from real Playground sessions)
