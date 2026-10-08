@@ -210,3 +210,19 @@ def test_status_headline_reflects_urgency(policy, clock):
     status = policy.status()
     assert status["tone"] == "urgent"
     assert len(status["proposed_actions"]) == 1
+
+
+def test_frames_confirmed_out_of_order_do_not_invent_a_second_delivery(policy, clock):
+    exp = policy.add_expectation("Pharmacy", "delivery", at(14), at(16))
+    clock.set(at(14, 30))
+    early = policy.record_observation(reading(package=True, confidence=0.1), ts=at(14, 10), frame_source="test")
+    late = policy.record_observation(reading(package=True, confidence=0.1), ts=at(14, 20), frame_source="test")
+
+    policy.review_observation(late["id"], package_present=True, person_present=False, reviewer="Asha")
+    policy.evaluate()
+    policy.review_observation(early["id"], package_present=True, person_present=False, reviewer="Asha")
+    policy.evaluate()
+
+    rows = policy.store.query("SELECT * FROM expectations")
+    assert len(rows) == 1 and rows[0]["id"] == exp["id"]
+    assert rows[0]["arrived_at"] == at(14, 10) and rows[0]["arrival_observation"] == early["id"]

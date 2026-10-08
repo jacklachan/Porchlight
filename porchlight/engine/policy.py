@@ -366,14 +366,29 @@ class Policy:
                 )
                 rule = "delivery.arrived_late"
             already_out = self.store.one(
-                "SELECT id FROM expectations WHERE kind = 'delivery' AND state IN ('arrived', 'overdue_pickup') "
-                "AND arrived_at <= ? LIMIT 1",
-                [ts],
+                "SELECT * FROM expectations WHERE kind = 'delivery' AND state IN ('arrived', 'overdue_pickup') "
+                "ORDER BY arrived_at LIMIT 1"
             )
             if exp:
                 self._mark_arrived(exp, rule, obs, new_alerts)
             elif not already_out:
                 self._unexpected_delivery(obs, new_alerts)
+            elif ts < already_out["arrived_at"]:
+                # Frames can be confirmed out of order. An earlier sighting of the package that is
+                # already out moves its arrival time back; it is not a second delivery.
+                self.store.update(
+                    "expectations",
+                    already_out["id"],
+                    {"arrived_at": ts, "arrival_observation": obs["id"], "updated_at": self.clock.now_ms()},
+                )
+                self.store.record(
+                    self.clock.now_ms(),
+                    "policy",
+                    already_out["id"],
+                    "arrival time moved earlier",
+                    rule_id="delivery.arrived",
+                    evidence=[obs["id"]],
+                )
             # else: the same package, still waiting. Nothing changes.
 
         elif obs["package_present"] is False:
