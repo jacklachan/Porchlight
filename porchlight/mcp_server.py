@@ -423,7 +423,10 @@ def build_mcp(policy: Policy, ingest: Ingest) -> tuple[MCPServer, PorchlightTool
         resource_uri=CARD_URI,
         name="check_porch_now",
         title="Look at the porch now",
-        description="Fetch the most recent frame from the Ring doorbell and report what it shows.",
+        description=(
+            "Call when asked to look now or whether something is still there. Fetches the most recent frame from "
+            "the Ring doorbell and returns what it shows. Do not call for general status; porch_status is cheaper."
+        ),
         annotations=types.ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=True),
     )
     async def check_porch_now() -> types.CallToolResult:
@@ -433,7 +436,10 @@ def build_mcp(policy: Policy, ingest: Ingest) -> tuple[MCPServer, PorchlightTool
         resource_uri=CARD_URI,
         name="list_proposed_actions",
         title="Requests waiting for approval",
-        description="Actions that Porchlight or the assistant proposed, and whether a family member approved them.",
+        description=(
+            "Call when asked what is waiting for approval, or right after propose_action so the person can decide "
+            "on screen. Returns proposed actions and what was decided."
+        ),
         annotations=READ_ONLY,
     )
     async def list_proposed_actions() -> types.CallToolResult:
@@ -463,7 +469,10 @@ def build_mcp(policy: Policy, ingest: Ingest) -> tuple[MCPServer, PorchlightTool
     @server.tool(
         name="list_check_ins",
         title="List check-ins",
-        description="Expected deliveries and visits for 'today' or 'tomorrow', with their current state.",
+        description=(
+            "Call when asked what is expected or planned for 'today' or 'tomorrow'. Returns each expected "
+            "delivery or visit with its time window and state. For 'is everything okay' use porch_status instead."
+        ),
         annotations=READ_ONLY,
     )
     async def list_check_ins(day: str = "today") -> types.CallToolResult:
@@ -500,7 +509,10 @@ def build_mcp(policy: Policy, ingest: Ingest) -> tuple[MCPServer, PorchlightTool
     @server.tool(
         name="list_alerts",
         title="List alerts",
-        description="Open alerts that need a family member's attention. Set include_resolved for history.",
+        description=(
+            "Call when asked specifically about alerts or past problems. Returns open alerts; set "
+            "include_resolved for history. For a general check use porch_status, which already includes open alerts."
+        ),
         annotations=READ_ONLY,
     )
     async def list_alerts(include_resolved: bool = False) -> types.CallToolResult:

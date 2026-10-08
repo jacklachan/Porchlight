@@ -12,29 +12,27 @@
     host -> app   ui/notifications/tool-result
 -->
 <style>
-  :root { color-scheme: dark; --ink:#f3f5fa; --dim:#aab5cf; --panel:#1d2b49; --line:#34456b; --lamp:#f4ad3d; --good:#7fd1ae; --bad:#ff8f7c; --dusk:#aab0ec; }
+  /* Sized for a smart display read from across a room: one title, one or two supporting lines,
+     one clear action. Type steps up by 1.6, per the Alexa+ add-on design guidance. */
+  :root { color-scheme: dark; --ink:#f3f5fa; --dim:#b4bed6; --panel:#1d2b49; --line:#34456b; --lamp:#f4ad3d; --good:#7fd1ae; --bad:#ff8f7c; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 14px; background: transparent; color: var(--ink); font: 16px/1.45 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
-  h2 { font-size: 1.15rem; margin: 0 0 4px; line-height: 1.2; }
+  body { margin: 0; padding: 14px; background: transparent; color: var(--ink); font: 20px/1.4 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; }
+  h2 { font-size: 1.6em; line-height: 1.15; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
   p { margin: 0; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
-  .body { padding: 14px 16px; display: grid; gap: 10px; }
-  .tone { height: 5px; background: var(--lamp); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .body { padding: 18px 20px 20px; display: grid; gap: 12px; }
+  .tone { height: 6px; background: var(--lamp); }
   .tone.urgent { background: var(--bad); } .tone.attention { background: #ff9a4a; } .tone.quiet { background: #8c9abb; }
-  .dim { color: var(--dim); font-size: .88rem; }
-  img.frame { width: 100%; display: block; }
-  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  li.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-  .tag { font-size: .78rem; padding: 2px 9px; border-radius: 999px; background: #2c3b62; color: var(--dusk); white-space: nowrap; }
+  .dim { color: var(--dim); font-size: .8em; }
+  img.frame { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  li.row { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+  .tag { font-size: .7em; padding: 3px 11px; border-radius: 999px; background: #2c3b62; color: #c3c8f5; white-space: nowrap; }
   .tag.good { background: #1f4a3d; color: var(--good); } .tag.warn { background: #5a2a25; color: var(--bad); } .tag.wait { background: #55431c; color: var(--lamp); }
-  .alert { border-left: 4px solid #ff9a4a; padding-left: 10px; }
-  .alert.urgent { border-left-color: var(--bad); }
-  .step { border-left: 2px solid var(--line); padding-left: 10px; }
-  code { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: .78rem; background: #14203a; padding: 1px 5px; border-radius: 4px; }
-  .ask { background: #14203a; border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
-  .buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-  button { font: inherit; border-radius: 10px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
-  button.go { background: var(--good); border-color: var(--good); color: #0f2a22; font-weight: 700; }
+  .step { border-left: 3px solid var(--line); padding-left: 12px; }
+  .buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+  button { font: inherit; font-weight: 700; border-radius: 12px; padding: 12px 20px; min-height: 48px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  button.go { background: var(--good); border-color: var(--good); color: #0f2a22; }
   button:disabled { opacity: .5; cursor: progress; }
   button:focus-visible { outline: 3px solid var(--lamp); outline-offset: 2px; }
 </style>
@@ -65,68 +63,97 @@
     scheduled: ["Expected", ""], arrived: ["On the porch", "wait"], overdue_pickup: ["Still outside", "warn"],
     completed: ["Done", "good"], missed: ["Not seen", "warn"], cancelled: ["Cancelled", ""],
   };
-  const checkIns = (items) => `<ul>${items.map((i) => {
+  const checkIns = (items) => `<ul>${items.slice(0, 4).map((i) => {
     const [label, tone] = STATE[i.state] || [i.state, ""];
-    return `<li class="row"><span>${esc(i.title)}<br><span class="dim">${esc(i.window)}</span></span><span class="tag ${tone}">${esc(label)}</span></li>`;
+    return `<li class="row"><span>${esc(i.title)} <span class="dim">${esc(i.window)}</span></span><span class="tag ${tone}">${esc(label)}</span></li>`;
   }).join("")}</ul>`;
-  const alerts = (items) => items.map((a) => `<div class="alert ${a.level === "urgent" ? "urgent" : ""}">
-    <b>${esc(a.title)}</b><p>${esc(a.body)}</p><p class="dim"><code>${esc(a.rule_id)}</code> ${esc(a.rule || "")}</p></div>`).join("");
-  const actions = (items) => items.map((a) => a.status === "proposed"
-    ? `<div class="ask"><b>${esc(a.title)}</b>${a.detail ? `<p class="dim">${esc(a.detail)}</p>` : ""}
-        <p class="dim">Nothing is sent until you choose.</p>
-        <div class="buttons"><button class="go" data-action="${esc(a.id)}" data-approve="1">Yes, go ahead</button>
-        <button data-action="${esc(a.id)}" data-approve="0">Not now</button></div></div>`
-    : `<div class="ask"><b>${esc(a.title)}</b><p class="dim">${esc(a.status[0].toUpperCase() + a.status.slice(1))}${a.decided_by ? ` by ${esc(a.decided_by)}` : ""}. ${esc(a.result || "")}</p></div>`).join("");
-  const reading = (o) => o ? `<p>${esc(o.summary)}</p><p class="dim">${esc(o.at)} · ${esc(o.status === "needs_review" ? "held for a person to confirm" : `read by ${o.read_by}, ${Math.round(o.confidence * 100)}% sure`)}</p>` : "";
+  const decide = (a) => `<div class="buttons"><button class="go" data-action="${esc(a.id)}" data-approve="1">Yes, go ahead</button>
+    <button data-action="${esc(a.id)}" data-approve="0">Not now</button></div>`;
+  const outcome = (a) => `${a.status[0].toUpperCase() + a.status.slice(1)}${a.decided_by ? ` by ${a.decided_by}` : ""}. ${a.result || ""}`;
 
+  // Each card: a title, at most two supporting lines, and at most one decision.
   function render(result) {
     const data = result.structuredContent || {};
     const images = (result.content || []).filter((b) => b.type === "image").map((b) => `data:${b.mimeType};base64,${b.data}`);
     const text = (result.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
-    let tone = "", body = "", frames = images;
+    let tone = "", title = "", lines = [], action = "", frames = images.slice(-1);
 
     if (data.card === "status") {
       tone = data.tone;
-      body = `<h2>${esc(data.headline)}</h2><p class="dim">${esc(data.person_name)}'s front door · as of ${esc(data.as_of)}</p>`
-        + alerts(data.alerts || []) + actions(data.proposed_actions || [])
-        + (data.check_ins?.length ? checkIns(data.check_ins) : "") + reading(data.last_observation);
+      const alert = (data.alerts || [])[0];
+      const ask = (data.proposed_actions || []).find((a) => a.status === "proposed");
+      title = data.headline;
+      if (alert) lines.push(esc(alert.body));
+      if (ask) {
+        lines.push(`<b>${esc(ask.title)}?</b> <span class="dim">Nothing is sent until you choose.</span>`);
+        action = decide(ask);
+      } else if (alert) {
+        action = `<div class="buttons"><button data-evidence="${esc(alert.id)}">Show me why</button></div>`;
+      } else if (data.check_ins?.length) {
+        lines.push(checkIns(data.check_ins));
+      }
+      lines.push(`<span class="dim">${esc(data.person_name)}'s front door, as of ${esc(data.as_of)}</span>`);
     } else if (data.card === "evidence") {
-      body = `<h2>Evidence: ${esc(data.title)}</h2>` + (data.steps || []).map((s) => `<div class="step"><b>${esc(s.at)}</b> ${esc(s.what)}
-        ${s.rule_id ? `<p class="dim"><code>${esc(s.rule_id)}</code> ${esc(s.rule || "")}</p>` : ""}</div>`).join("")
-        + (data.observations || []).map((o) => `<p class="dim">Frame at ${esc(o.at)}: ${esc(o.summary)} <code>sha256 ${esc((o.frame_sha256 || "").slice(0, 16))}</code></p>`).join("");
+      title = `Why: ${data.title}`;
+      const steps = (data.steps || []).filter((s) => s.rule).slice(-2);
+      lines = steps.map((s) => `<div class="step"><b>${esc(s.at)}</b> ${esc(s.what)}. <span class="dim">${esc(s.rule)}</span></div>`);
+      const seen = (data.observations || []).slice(-1)[0];
+      if (seen) lines.push(`<span class="dim">Frame from ${esc(seen.at)}: ${esc(seen.summary)}</span>`);
     } else if (data.card === "frame") {
-      body = `<h2>The porch just now</h2>` + reading(data.observation);
+      const o = data.observation || {};
+      title = o.status === "needs_review" ? "I am not sure what this shows" : o.summary;
+      lines.push(`<span class="dim">The porch at ${esc(o.at)}${o.status === "needs_review" ? ". It is waiting for you on the dashboard." : ""}</span>`);
     } else if (data.card === "actions") {
-      body = `<h2>Requests</h2>` + (actions(data.proposed_actions || []) || `<p class="dim">Nothing is waiting.</p>`);
+      const items = data.proposed_actions || [];
+      const ask = items.find((a) => a.status === "proposed");
+      const shown = ask || items[0];
+      title = shown ? shown.title : "Nothing is waiting for you";
+      if (ask) {
+        if (ask.detail) lines.push(esc(ask.detail));
+        lines.push(`<span class="dim">Nothing is sent until you choose.</span>`);
+        action = decide(ask);
+      } else if (shown) {
+        tone = shown.status === "approved" ? "" : "quiet";
+        lines.push(esc(outcome(shown)));
+      }
     } else if (data.card === "check_ins") {
-      body = `<h2>Check-ins${data.day ? ` · ${esc(data.day)}` : ""}</h2>` + checkIns(data.check_ins || []);
+      title = data.day ? `Expected ${data.day}` : "Check-ins";
+      lines.push(data.check_ins?.length ? checkIns(data.check_ins) : `<span class="dim">Nothing.</span>`);
     } else if (data.card === "alerts") {
-      body = `<h2>Alerts</h2>` + (alerts(data.alerts || []) || `<p class="dim">No open alerts.</p>`);
+      const first = (data.alerts || [])[0];
+      tone = first ? (first.level === "urgent" ? "urgent" : "attention") : "quiet";
+      title = first ? first.title : "No open alerts";
+      if (first) {
+        lines.push(esc(first.body));
+        action = `<div class="buttons"><button data-evidence="${esc(first.id)}">Show me why</button></div>`;
+      }
     } else {
       tone = result.isError ? "urgent" : "quiet";
-      body = `<p>${esc(data.message || text)}</p>`;
+      title = data.message || text;
     }
     root.innerHTML = `<div class="card">${tone ? `<div class="tone ${esc(tone)}"></div>` : ""}
       ${frames.map((src) => `<img class="frame" src="${src}" alt="Frame from the doorbell camera">`).join("")}
-      <div class="body">${body}</div></div>`;
+      <div class="body"><h2>${esc(title)}</h2>${lines.map((l) => `<div>${l}</div>`).join("")}${action}</div></div>`;
     root.querySelectorAll("img").forEach((img) => img.addEventListener("load", reportSize));
     reportSize();
   }
 
   root.addEventListener("click", async (event) => {
-    const button = event.target.closest("button[data-action]");
+    const button = event.target.closest("button");
     if (!button) return;
     root.querySelectorAll("button").forEach((b) => (b.disabled = true));
     try {
       // decide_action is registered with visibility ["app"]: only this tap can reach it.
-      const result = await request("tools/call", {
-        name: "decide_action",
-        arguments: { action_id: button.dataset.action, approve: button.dataset.approve === "1" },
-      });
+      const result = button.dataset.evidence
+        ? await request("tools/call", { name: "get_evidence", arguments: { subject_id: button.dataset.evidence } })
+        : await request("tools/call", {
+            name: "decide_action",
+            arguments: { action_id: button.dataset.action, approve: button.dataset.approve === "1" },
+          });
       render(result);
     } catch (err) {
       root.querySelectorAll("button").forEach((b) => (b.disabled = false));
-      root.insertAdjacentHTML("beforeend", `<p class="dim">Could not save that: ${esc(err.message || err)}</p>`);
+      root.insertAdjacentHTML("beforeend", `<p class="dim">That did not work: ${esc(err.message || err)}</p>`);
       reportSize();
     }
   });

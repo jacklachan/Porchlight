@@ -26,7 +26,7 @@
     .said { justify-self: end; background: #23345a; padding: 8px 14px; border-radius: 16px 16px 4px 16px; max-width: 80%; }
     .spoken { font-size: 1.25rem; line-height: 1.4; max-width: 44ch; text-wrap: pretty; }
     .spoken::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--lamp); margin-right: 10px; transform: translateY(-2px); }
-    iframe.card { width: min(560px, 100%); border: 0; height: 120px; background: transparent; color-scheme: dark; }
+    iframe.card { width: min(640px, 100%); border: 0; height: 120px; background: transparent; color-scheme: dark; }
     details.trace { color: var(--dim); font-size: .85rem; }
     details.trace summary { cursor: pointer; }
     details.trace pre { font: .78rem/1.45 "IBM Plex Mono", ui-monospace, Consolas, monospace; background: #0a111f; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; margin: 8px 0 0; }
@@ -123,7 +123,7 @@ window.addEventListener("message", async (event) => {
     // A tap inside the card. The server only allows card tools through this route.
     try {
       const me = localStorage.getItem("pl_name") || "family";
-      const args = { ...msg.params.arguments, decided_by: me };
+      const args = msg.params.name === "decide_action" ? { ...msg.params.arguments, decided_by: me } : msg.params.arguments;
       reply({ result: await post("/api/assistant/card-call", { name: msg.params.name, arguments: args }) });
     } catch (err) {
       reply({ error: { code: -32000, message: err.message } });

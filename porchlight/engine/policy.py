@@ -969,7 +969,8 @@ class Policy:
         elif not items:
             tone, headline = "quiet", f"Nothing is expected at {name}'s door today."
         elif done == len(items):
-            tone, headline = "good", f"All {len(items)} of today's check-ins are done."
+            tone = "good"
+            headline = "Today's check-in is done." if len(items) == 1 else f"All {len(items)} of today's check-ins are done."
         else:
             waiting = [i for i in items if i["state"] == "arrived"]
             if waiting:
