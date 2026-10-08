@@ -22,7 +22,7 @@ from .assistant import Assistant
 from .clock import MINUTE_MS, Clock
 from .config import Settings
 from .db import Store, new_id
-from .engine import RULES, Ingest, Policy
+from .engine import RULES, Ingest, Paused, Policy
 from .mcp_server import build_mcp, parse_when
 from .notify import WebhookNotifier
 from .ring import MediaNotReady, RingAuthError, RingClient, RingError, WebhookError, parse, verify_signature
@@ -92,6 +92,11 @@ class AssistantIn(BaseModel):
 class CardCallIn(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class PauseIn(BaseModel):
+    minutes: int | None = Field(default=None, ge=5, le=7 * 24 * 60)
+    by: str = Field(default="family", max_length=60)
 
 
 class AdvanceIn(BaseModel):
@@ -230,6 +235,7 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
             "threshold": settings.confidence_threshold,
         }
         status["frame_stats"] = policy.frame_stats()
+        status["retention_days"] = settings.frame_retention_days
         status["demo"] = {"enabled": settings.demo, "clock_offset_minutes": clock.offset_ms // MINUTE_MS}
         status["mcp_url"] = f"{settings.base_url}/mcp"
         return status
@@ -283,11 +289,16 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
         )
 
+    def viewer(request: Request) -> str:
+        return (request.headers.get("x-porchlight-user") or "family").strip()[:60] or "family"
+
     @app.get("/api/evidence/{subject_id}", dependencies=api)
-    async def evidence(subject_id: str) -> dict[str, Any]:
+    async def evidence(subject_id: str, request: Request) -> dict[str, Any]:
         chain = policy.evidence_for(subject_id)
         if not chain["subject"]:
             raise HTTPException(status_code=404, detail="No such check-in or alert")
+        # Every look at the frames is itself on the record.
+        store.record(clock.now_ms(), viewer(request), subject_id, "evidence and frames viewed")
         chain["observations"] = [with_frame(o) for o in chain["observations"]]
         return chain
 
@@ -398,13 +409,18 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
         content = await request.body()
         if not content or len(content) > MAX_FRAME_BYTES:
             raise HTTPException(status_code=413, detail="Frame is empty or too large")
-        obs = await ingest.observe_frame(content, content_type, ts=clock.now_ms(), frame_source="ring_live_view")
+        try:
+            obs = await ingest.observe_frame(content, content_type, ts=clock.now_ms(), frame_source="ring_live_view")
+        except Paused as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"observation": with_frame(obs)}
 
     @app.post("/api/porch/check", dependencies=api)
     async def porch_check() -> dict[str, Any]:
         try:
             obs = await ingest.check_porch_now()
+        except Paused as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except MediaNotReady as exc:
             raise HTTPException(
                 status_code=409,
@@ -434,6 +450,27 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
             raise HTTPException(status_code=404)
         await ingest.evaluate()
         return {"action": action}
+
+    # -- privacy controls ------------------------------------------------------
+
+    @app.post("/api/privacy/pause", dependencies=api)
+    async def pause(body: PauseIn) -> dict[str, Any]:
+        until = policy.pause(body.minutes, body.by)
+        ingest.changed()
+        return {"paused_until": until}
+
+    @app.post("/api/privacy/resume", dependencies=api)
+    async def resume(body: AckIn) -> dict[str, Any]:
+        policy.resume(body.by)
+        ingest.mark_history_cutoff()
+        await ingest.evaluate()
+        return {"ok": True}
+
+    @app.post("/api/privacy/delete-frames", dependencies=api)
+    async def delete_frames(body: AckIn) -> dict[str, Any]:
+        deleted = policy.delete_frames(settings.media_dir, older_than_ms=None, by=body.by)
+        ingest.changed()
+        return {"deleted": deleted}
 
     # -- ring ----------------------------------------------------------------
 
@@ -483,7 +520,10 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
         return {"connection": ingest.connection()}
 
     @app.post("/api/ring/whep", dependencies=api)
-    async def whep_start(body: WhepIn) -> dict[str, Any]:
+    async def whep_start(body: WhepIn, request: Request) -> dict[str, Any]:
+        if policy.paused_until():
+            raise HTTPException(status_code=409, detail="Porchlight is paused. Resume it to open the live view.")
+        store.record(clock.now_ms(), viewer(request), "porchlight", "live view opened")
         try:
             device_id = await ingest.ensure_device()
             answer, session_url = await ring.whep_start(device_id, body.sdp_offer)
@@ -557,6 +597,7 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
             for table in ("events", "webhook_requests", "observations", "expectations", "alerts", "actions", "ledger", "plans"):
                 store.execute(f"DELETE FROM {table}")
             sim_state.reset()
+            store.set_meta("paused_until", "0")
             clock.reset()
             store.set_meta("clock_offset_ms", "0")
             ingest.mark_history_cutoff()

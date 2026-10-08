@@ -19,7 +19,7 @@ function authHeaders() {
 }
 
 async function api(path, options = {}) {
-  const headers = { ...authHeaders(), ...(options.headers || {}) };
+  const headers = { ...authHeaders(), "X-Porchlight-User": me(), ...(options.headers || {}) };
   let body = options.body;
   if (body && !(body instanceof Blob) && typeof body !== "string") {
     body = JSON.stringify(body);
@@ -38,7 +38,9 @@ async function api(path, options = {}) {
   return data;
 }
 
-const me = () => $("you").value.trim() || "family";
+function me() {
+  return $("you").value.trim() || "family";
+}
 
 // ---- time -------------------------------------------------------------------
 
@@ -99,6 +101,7 @@ function render() {
   renderPlans();
   renderDoor();
   renderFunnel();
+  renderPrivacy();
   renderStandIn();
 
   const v = s.vision;
@@ -116,13 +119,14 @@ function renderRing() {
   let label;
   if (c.simulated) { dot.classList.add("sim"); label = "Local stand-in, not Ring"; }
   else if (c.last_error) { dot.classList.add("bad"); label = "Ring needs a new token"; }
+  else if (c.device_name && c.device_online === false) { label = `Ring: ${c.device_name} (offline)`; }
   else if (c.device_name) { dot.classList.add("ok"); label = `Ring: ${c.device_name}`; }
   else if (!c.auth_mode) { dot.classList.add("bad"); label = "Connect Ring"; }
   else label = "Ring: connecting";
   $("ring-label").textContent = label;
   $("ring-facts").innerHTML = [
     ["Talking to", c.simulated ? "the bundled local stand-in (not Ring)" : c.api_base],
-    ["Device", c.device_name ? `${c.device_name}` : "none found yet"],
+    ["Device", c.device_name ? `${c.device_name}${c.device_online === false ? " (offline)" : c.device_online ? " (online)" : ""}` : "none found yet"],
     ["Sign-in", c.auth_mode === "refresh_token" ? "OAuth refresh token" : c.auth_mode === "access_token" ? "Playground access token" : "no token"],
     ["Last checked", c.last_poll ? clock(c.last_poll) : "not yet"],
     ["Problem", c.last_error || "none"],
@@ -266,6 +270,15 @@ const SOURCES = {
   stand_in_snapshot: "Stand-in frame, not Ring",
 };
 
+// Who or what stands behind a reading, in plain words.
+function readBy(o) {
+  if (o.reviewed_by) return `Confirmed by ${o.reviewed_by}`;
+  if (o.status === "unusable") return "Set aside without asking a model";
+  if (o.provider === "unchanged") return "Porch unchanged, so the earlier reading stands (no model call)";
+  if (o.provider === "none") return "Not read by a model";
+  return `Read by ${o.provider}${o.model ? ` (${o.model})` : ""}, ${Math.round(o.confidence * 100)}% sure`;
+}
+
 function renderDoor() {
   const o = state.last_observation;
   if (live.pc) return; // live video is showing; leave the frame alone
@@ -276,9 +289,8 @@ function renderDoor() {
     img.hidden = false;
     $("frame-empty").hidden = true;
     $("frame-cap").textContent = `${SOURCES[o.frame_source] || o.frame_source} · ${clock(o.ts)}`;
-    const who = o.reviewed_by ? `confirmed by ${o.reviewed_by}` : `${o.provider}, ${Math.round(o.confidence * 100)}% sure`;
+    const who = readBy(o);
     const held = o.status === "needs_review" ? " Held for you to confirm." : "";
-    if (o.provider === "unchanged") o.provider = "same as the last frame read";
     $("reading").innerHTML = `${esc(o.summary)}${esc(held)}<span class="meta">${esc(who)} · frame <span class="mono">${esc((o.snapshot_sha256 || "").slice(0, 12))}</span></span>`;
   } else {
     img.hidden = true;
@@ -298,6 +310,22 @@ function renderFunnel() {
   if (f.confirmed_by_person) parts.push(`${f.confirmed_by_person} confirmed by a person`);
   if (f.events_skipped) parts.push(`${f.events_skipped} event${f.events_skipped === 1 ? "" : "s"} not worth a look`);
   $("funnel").textContent = parts.join(" · ");
+}
+
+function renderPrivacy() {
+  const paused = state.paused_until;
+  $("pause-tag").hidden = !paused;
+  $("resume-btn").hidden = !paused;
+  document.querySelectorAll("[data-pause]").forEach((b) => (b.hidden = !!paused));
+  const days = state.retention_days;
+  const keep = `Frames are deleted after ${days} day${days === 1 ? "" : "s"}; what was seen stays in the record. Nobody is identified, and frames never leave this server except to the model that reads them.`;
+  $("privacy-note").textContent = paused
+    ? `Paused${state.paused_forever ? "" : ` until ${clock(paused)}`}. Nothing at the door is being watched or recorded, and anything due in this time will be marked "not watched", not "missed".`
+    : `${state.person_name} or anyone in the family can pause Porchlight at any time. ${keep}`;
+  const offline = state.connection.device_online === false && !state.connection.simulated;
+  if (offline && !$("door-msg").textContent) {
+    doorMessage("This device is currently offline. Live video and motion events are unavailable until it reconnects.");
+  }
 }
 
 function renderStandIn() {
@@ -326,7 +354,7 @@ async function showEvidence(id) {
     .join("");
   $("ev-frames").innerHTML = chain.observations
     .map((o) => {
-      const who = o.reviewed_by ? `Confirmed by ${o.reviewed_by}` : `Read by ${o.provider}${o.model ? ` (${o.model})` : ""}, ${Math.round(o.confidence * 100)}% sure`;
+      const who = readBy(o);
       return `<figure class="ev-frame" style="margin:0">
         ${o.frame_url ? `<img src="${esc(o.frame_url)}" alt="Frame at ${esc(clock(o.ts))}">` : ""}
         <div><b>${esc(clock(o.ts))}</b> · ${esc(o.summary)}<br>${esc(who)} · ${esc(SOURCES[o.frame_source] || o.frame_source)}
@@ -450,6 +478,7 @@ document.addEventListener("click", (event) => {
   if (d.cancel) return act(b, () => api(`/api/expectations/${d.cancel}`, { method: "DELETE" }));
   if (d.removePlan) return act(b, () => api(`/api/plans/${d.removePlan}`, { method: "DELETE" }));
   if (d.removeContact) return act(b, () => api(`/api/contacts/${d.removeContact}`, { method: "DELETE" }));
+  if (d.pause !== undefined) return act(b, () => api("/api/privacy/pause", { method: "POST", body: { minutes: Number(d.pause) || null, by: me() } }));
   if (d.scene) return act(b, () => api("/api/demo/scene", { method: "POST", body: { scene: d.scene, event: d.event || "motion" } }));
   if (d.advance) return act(b, () => api("/api/demo/advance", { method: "POST", body: { minutes: Number(d.advance) } }));
 });
@@ -472,6 +501,12 @@ $("watch").addEventListener("change", (e) => {
 });
 $("reset-btn").addEventListener("click", (e) => {
   if (confirm("Clear everything in this local stand-in session?")) act(e.currentTarget, () => api("/api/demo/reset", { method: "POST" }));
+});
+$("resume-btn").addEventListener("click", (e) => act(e.currentTarget, () => api("/api/privacy/resume", { method: "POST", body: { by: me() } })));
+$("delete-frames-btn").addEventListener("click", (e) => {
+  if (confirm("Delete every stored frame? The record of what was seen stays, but the pictures cannot be brought back.")) {
+    act(e.currentTarget, () => api("/api/privacy/delete-frames", { method: "POST", body: { by: me() } }));
+  }
 });
 $("ring-pill").addEventListener("click", () => $("ring-dialog").showModal());
 $("you").value = localStorage.getItem("pl_name") || "";

@@ -12,6 +12,7 @@ def main() -> None:
     parser.add_argument("--demo", action="store_true", help="use the bundled local stand-in instead of Ring")
     parser.add_argument("--host", help="bind address (default 127.0.0.1)")
     parser.add_argument("--port", type=int, help="port (default 8000)")
+    parser.add_argument("--data-dir", help="where the database and frames are kept (default data)")
     parser.add_argument("--env-file", default=".env", help="path to a .env file (default .env)")
     args = parser.parse_args()
 
@@ -24,6 +25,8 @@ def main() -> None:
         os.environ["PORCHLIGHT_HOST"] = args.host
     if args.port:
         os.environ["PORCHLIGHT_PORT"] = str(args.port)
+    if args.data_dir:
+        os.environ["PORCHLIGHT_DATA_DIR"] = args.data_dir
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     for noisy in ("httpx", "httpx2", "mcp"):

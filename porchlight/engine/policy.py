@@ -41,6 +41,8 @@ RULES: dict[str, str] = {
     "visit.rang": "The doorbell was pressed inside an expected visit window.",
     "visit.seen": "A trusted frame shows a person, with no package, inside an expected visit window.",
     "visit.missed": "The window and its grace period ended with no visitor seen.",
+    "privacy.paused": "Watching was paused from the dashboard. No events or frames are taken while paused.",
+    "privacy.retention": "Frames are deleted after the retention period. The reading and the frame's hash are kept.",
     "action.approved": "A family member approved a proposed action.",
     "action.rejected": "A family member rejected a proposed action.",
 }
@@ -197,6 +199,77 @@ class Policy:
                     actor="plan",
                 )
 
+    # -- pausing and deleting ----------------------------------------------
+
+    FOREVER = 2**62
+
+    def paused_until(self) -> int | None:
+        """Epoch ms the pause ends (FOREVER for 'until resumed'), or None when watching."""
+        until = int(self.store.get_meta("paused_until", "0") or 0)
+        if until and until > self.clock.now_ms():
+            return until
+        if until:
+            self._end_pause("policy", "pause ended")
+        return None
+
+    def pause(self, minutes: int | None, by: str) -> int:
+        now = self.clock.now_ms()
+        until = now + minutes * MINUTE_MS if minutes else self.FOREVER
+        self.store.set_meta("paused_until", str(until))
+        self.store.set_meta("paused_since", str(now))
+        self.store.record(
+            now, by, "porchlight", "watching paused", rule_id="privacy.paused", detail={"minutes": minutes}
+        )
+        return until
+
+    def resume(self, by: str) -> None:
+        if int(self.store.get_meta("paused_until", "0") or 0):
+            self._end_pause(by, "watching resumed")
+
+    def _end_pause(self, by: str, what: str) -> None:
+        now = self.clock.now_ms()
+        since = int(self.store.get_meta("paused_since", "0") or 0)
+        self.store.set_meta("paused_until", "0")
+        self.store.record(now, by, "porchlight", what, rule_id="privacy.paused")
+        # Anything whose window overlapped the pause was not watched. Say so, rather than calling it missed.
+        for exp in self.store.query(
+            "SELECT * FROM expectations WHERE state = 'scheduled' AND window_start < ? AND window_end > ?", [now, since]
+        ):
+            self.store.update(
+                "expectations",
+                exp["id"],
+                {"state": "cancelled", "note": "Not watched: Porchlight was paused", "updated_at": now},
+            )
+            self.store.record(now, "policy", exp["id"], "not watched: paused during its window", rule_id="privacy.paused")
+
+    def delete_frames(self, media_dir: Any, *, older_than_ms: int | None, by: str) -> int:
+        """Delete stored frame files. Readings, hashes and the ledger stay, so the record still makes sense."""
+        if older_than_ms is None:
+            rows = self.store.query("SELECT id, snapshot_file FROM observations WHERE snapshot_file IS NOT NULL")
+        else:
+            rows = self.store.query(
+                "SELECT id, snapshot_file FROM observations WHERE snapshot_file IS NOT NULL AND ts < ?", [older_than_ms]
+            )
+        files = {row["snapshot_file"] for row in rows}
+        for name in files:
+            try:
+                (media_dir / name).unlink(missing_ok=True)
+            except OSError:
+                pass
+        for row in rows:
+            self.store.update("observations", row["id"], {"snapshot_file": None})
+        if rows:
+            # A frame nobody answered about cannot be answered once it is gone.
+            self.store.execute("UPDATE observations SET status = 'expired' WHERE status = 'needs_review' AND snapshot_file IS NULL")
+            self.store.record(
+                self.clock.now_ms(),
+                by,
+                "porchlight",
+                f"{len(files)} frame{'s' if len(files) != 1 else ''} deleted",
+                rule_id="privacy.retention" if older_than_ms is not None else None,
+            )
+        return len(files)
+
     # -- observations ----------------------------------------------------
 
     def gate(self, reading: Reading) -> str:
@@ -315,6 +388,8 @@ class Policy:
         """Apply every rule. Safe to call as often as you like; returns the new alerts."""
         now = self.clock.now_ms()
         new_alerts: list[dict[str, Any]] = []
+        if self.paused_until():
+            return new_alerts  # nothing is watched and nothing is judged while paused
         self.materialize_plans(now)
 
         for event in self.store.query(
@@ -879,7 +954,15 @@ class Policy:
         done = sum(1 for i in items if i["state"] == "completed")
         name = self.settings.person_name
 
-        if any(a["level"] == "urgent" for a in open_alerts):
+        paused = self.paused_until()
+        if paused:
+            tone = "quiet"
+            headline = (
+                "Porchlight is paused."
+                if paused >= self.FOREVER
+                else f"Porchlight is paused until {self._t(paused)}."
+            )
+        elif any(a["level"] == "urgent" for a in open_alerts):
             tone, headline = "urgent", open_alerts[0]["title"]
         elif open_alerts:
             tone, headline = "attention", open_alerts[0]["title"]
@@ -896,6 +979,8 @@ class Policy:
 
         return {
             "now": now,
+            "paused_until": paused,
+            "paused_forever": bool(paused and paused >= self.FOREVER),
             "timezone": self.settings.timezone,
             "person_name": name,
             "tone": tone,

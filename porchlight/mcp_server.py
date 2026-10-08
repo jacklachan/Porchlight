@@ -26,7 +26,7 @@ from PIL import Image
 
 from . import __version__
 from .clock import DAY_MS, fmt_time, to_local, tz
-from .engine import RULES, Ingest, Policy
+from .engine import RULES, Ingest, Paused, Policy
 from .ring import MediaNotReady, RingError
 
 CARD_URI = "ui://porchlight/card.html"
@@ -171,7 +171,11 @@ class PorchlightTools:
 
     # -- tools ---------------------------------------------------------------
 
+    def _log(self, what: str, subject: str = "porchlight") -> None:
+        self.policy.store.record(self.policy.clock.now_ms(), "assistant", subject, what)
+
     async def porch_status(self) -> types.CallToolResult:
+        self._log("status and latest frame read by an assistant")
         status = self.policy.status()
         items = [self._check_in(e) for e in status["expectations"]]
         alerts = [self._alert(a) for a in status["alerts"]]
@@ -224,6 +228,7 @@ class PorchlightTools:
         chain = self.policy.evidence_for(subject_id)
         if not chain["subject"]:
             return _error(f"No check-in or alert with id {subject_id!r}.")
+        self._log("evidence and frames read by an assistant", subject_id)
         steps = [
             {
                 "at": self._t(e["ts"]),
@@ -300,6 +305,8 @@ class PorchlightTools:
     async def check_porch_now(self) -> types.CallToolResult:
         try:
             obs = await self.ingest.check_porch_now()
+        except Paused:
+            return _error("Porchlight is paused, so I cannot look at the porch right now.")
         except MediaNotReady:
             return _error("Ring has no stored frame for right now. A frame arrives with the next event at the door.")
         except RingError as exc:

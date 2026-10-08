@@ -40,6 +40,36 @@ and Ring event ids behind it. "See the evidence" on any alert shows that chain.
 
 Porchlight never identifies anyone. The model is told to report only *package / person / vehicle present*.
 
+### Care, not surveillance
+
+The camera belongs to the person being cared for, so they keep the controls:
+
+- **Pause** for an hour or until resumed. While paused nothing is fetched, read or judged, and anything due
+  in that time is recorded as "not watched", never "missed".
+- **Delete all frames** at any time. Frames are also deleted automatically after 7 days
+  (`FRAME_RETENTION_DAYS`). What was seen, and each frame's SHA-256, stay in the record.
+- **Every look is on the record.** Opening the evidence for an alert, opening the live view, and each time
+  an assistant reads the status are written to the same ledger as the rule changes, with the viewer's name.
+
+---
+
+## Built to Ring's own guidance
+
+Ring publishes [computer vision guidelines](https://developer.amazon.com/docs/ring/computer-vision-guidelines.html),
+a [design guide](https://developer.amazon.com/docs/ring/ux-design-guide.html) and a
+[content policy](https://developer.amazon.com/docs/ring/content-policy.html) for Appstore apps. Porchlight follows them:
+
+| Ring's guidance | What Porchlight does |
+|---|---|
+| "Spend compute in proportion to the probability that an event matters": a tiered funnel | **Stage 0** decides from the event alone: animal motion is never read; with nothing expected and no package out, at most one frame is read per 10 minutes. **Stage 1** is CPU only: dark, blown-out or blank frames are set aside, and a frame that shows the same porch as the last one read reuses that reading. Only what is left reaches the model. The dashboard shows the day's funnel ("12 frames today, 3 read by the model"). |
+| All delivered media carries a watermark; account for it | The frame comparison ignores the top and bottom bands where Ring's logo, device id and running timestamp sit, so the clock ticking is not mistaken for a change. |
+| Webhook handlers must respond within 5 seconds | The webhook is verified, stored and acknowledged immediately; the frame is fetched and read afterwards. |
+| Show confidence; give users a way to correct | Every reading shows who or what made it and how sure it was. Readings under the threshold wait for a person's yes or no, and that answer is what the rules use. |
+| No covert third-party surveillance; give customers easy access to access logs | The ledger records every view of frames and every assistant read, by name. Pausing and deleting are one click. |
+| No biometric identification without consent | None at all: the model is asked only whether a package, a person or a vehicle is present. |
+| Show devices by name, show online or offline, explain empty states | The header shows the device's name and status; an offline device gets Ring's suggested wording; every empty list says what to do next. |
+| WCAG 2.2 AA; do not rely on colour alone; respect reduced motion | States are always written as words beside the colour, focus is visible, controls are keyboard reachable, and the one animation stops under `prefers-reduced-motion`. |
+
 ---
 
 ## How Ring is used
@@ -94,8 +124,15 @@ python -m venv .venv
 4. Open http://127.0.0.1:8000. Playground tokens last about 30 minutes; paste a new one from the **Ring** pill
    at the top right without restarting.
 
-To have frames read automatically set `VISION_PROVIDER=bedrock` (with AWS credentials). Without it, each
-frame appears under **Needs you** for you to confirm.
+To have frames read automatically set `VISION_PROVIDER=bedrock` (with AWS credentials), or
+`VISION_PROVIDER=openai` with `VISION_BASE_URL`, `VISION_MODEL` and `VISION_API_KEY` for any
+OpenAI-compatible endpoint, including a local one. Check it against a saved frame with
+`python scripts/vision_check.py data/media/<frame>.jpg`. Without a model, each frame appears under
+**Needs you** for you to confirm.
+
+The Playground device only produces events while a live view is open, so on the Playground press
+**Live view** and tick **Keep watching**: Porchlight then looks every 20 seconds and reads a frame only
+when the porch has changed.
 
 ### Without Ring (local stand-in)
 
@@ -113,7 +150,7 @@ footage**; the dashboard labels them as stand-in frames throughout.
 .venv/Scripts/python -m pytest -q
 ```
 
-42 tests. The integration tests start the real server and exercise the Ring client, the signed webhook
+50 tests. The integration tests start the real server and exercise the Ring client, the signed webhook
 path, the image-download redirect, the rules, and the MCP server over real HTTP against the stand-in.
 
 ---
@@ -199,11 +236,11 @@ so this repository runs with no extra install step.
 ```
 porchlight/
   ring/        client.py  webhooks.py  simulator.py (local stand-in)
-  vision/      base.py  bedrock.py  fixture.py
+  vision/      base.py  frames.py (cheap gates)  bedrock.py  openai_compat.py  fixture.py
   engine/      policy.py (rules + ledger)  ingest.py (events -> frames -> readings)
   mcp_server.py   assistant.py   api.py   notify.py
   web/         index.html app.js app.css   alexa.html   mcp-card.html
-scripts/ring_check.py
+scripts/ring_check.py   scripts/vision_check.py
 tests/
 ```
 

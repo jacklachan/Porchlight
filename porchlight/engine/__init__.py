@@ -1,4 +1,4 @@
-from .ingest import Ingest
+from .ingest import Ingest, Paused
 from .policy import RULES, Policy
 
-__all__ = ["Ingest", "Policy", "RULES"]
+__all__ = ["Ingest", "Paused", "Policy", "RULES"]

@@ -12,7 +12,9 @@ personal footage, say so on screen (Amazon's forum guidance: make clear which fo
 4. Add a contact (Mrs Rao, next-door neighbour) so the proposed action names a person.
 5. Real Ring has no time controls. To show "still outside" quickly, create the delivery with the **15 minutes** pickup limit
    and cut the wait out of the recording. Do not fake the clock on real Ring footage.
-6. Tokens last about 30 minutes: record in one sitting, or paste a new token from the Ring pill between takes.
+6. The Playground device only produces events while a live view is open. In the dashboard press **Live view**
+   and tick **Keep watching** before you start the Package stream in the Playground.
+7. Tokens last about 30 minutes: record in one sitting, or paste a new token from the Ring pill between takes.
 
 ## Shot list
 
@@ -24,12 +26,14 @@ personal footage, say so on screen (Amazon's forum guidance: make clear which fo
 | 1:05 to 1:30 | Alert: "still on the porch". Click **See the evidence**: rule id, frame, sha256, Ring event id | "Fifteen minutes later nobody has brought it in. Every alert shows the rule that fired and the exact frames behind it." |
 | 1:30 to 1:50 | A low-confidence frame under "Your eyes needed"; click "Yes, a package" | "If the model is not sure, nothing changes until a person confirms. The model advises. It never acts." |
 | 1:50 to 2:30 | `/alexa`: "How is Mom doing?" then "Ask a neighbour to knock." Card appears; tap **Yes, go ahead** | "The same data is an MCP server, so an assistant like Alexa+ can answer with the frame as proof. It can propose asking a neighbour, but approving is a button only a person can press. That tool is never offered to the model." |
+| (if time) | Privacy panel: **Pause for 1 hour**; headline changes to "paused" | "It is her door. She can pause it or delete every frame, and every look at a frame is on the record." |
 | 2:30 to 2:50 | Open "How this was answered": tool calls, MCP version, Streamable HTTP. Then live view + "Read this frame" | "Under the hood: Ring Event History, snapshots, webhooks and WHEP live view; MCP over Streamable HTTP with MCP Apps cards." |
 | 2:50 to 3:00 | Dashboard, lamp back to amber after pickup | "Porchlight. Care check-ins from the front door." |
 
 ## Things judges score, and where the video shows them
 
-- **Tech implementation:** real Ring API calls (history, image download, live view), signed webhooks, MCP 2025-11-25+.
+- **Tech implementation:** real Ring API calls (history, image download, live view), signed webhooks, MCP 2025-11-25+,
+  and the tiered vision funnel from Ring's own computer vision guidelines (point at the "frames today" line).
 - **Design:** one sentence at the top answers "is she okay"; evidence one click away.
 - **Impact:** caretaking is a Ring priority category and a listed Ring Appstore category.
 - **Idea:** a non-security use of a security camera; absence of a pickup as a wellness signal.

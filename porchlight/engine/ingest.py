@@ -22,6 +22,7 @@ import httpx
 from ..clock import MINUTE_MS, Clock
 from ..config import Settings
 from ..db import Store
+from ..clock import DAY_MS
 from ..ring import HistoryEvent, MediaNotReady, RingAuthError, RingClient, RingError, WebhookEvent
 from ..vision import frames
 from ..vision.base import Reading, VisionProvider
@@ -38,6 +39,10 @@ UNCHANGED_MAX_AGE_MS = 6 * 60 * MINUTE_MS
 _HISTORY_TO_TYPE = {"motion": "motion", "ding": "ding", "on_demand": "on_demand"}
 _WEBHOOK_TO_TYPE = {"motion_detected": "motion", "button_press": "ding"}
 _EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+class Paused(Exception):
+    """Raised when a frame is offered while watching is paused."""
 
 
 class Ingest:
@@ -59,6 +64,7 @@ class Ingest:
         self.device_id: str | None = settings.ring_device_id
         self.device_name: str | None = None
         self.last_error: str | None = None
+        self.device_online: bool | None = None
         self.last_poll_ms: int | None = None
         self._last_porch_check_ms = 0
         self._lock = asyncio.Lock()
@@ -103,6 +109,7 @@ class Ingest:
             "api_base": self.ring.api_base,
             "device_id": self.device_id,
             "device_name": self.device_name,
+            "device_online": self.device_online,
             "last_poll": self.last_poll_ms,
             "last_error": self.last_error,
             "simulated": "/sim" in self.ring.api_base,
@@ -148,7 +155,9 @@ class Ingest:
         )
 
     def accept_webhook(self, event: WebhookEvent) -> str:
-        """Record a verified webhook. Returns 'duplicate', 'ignored' or 'stored'."""
+        """Record a verified webhook. Returns 'duplicate', 'ignored', 'paused' or 'stored'."""
+        if self.policy.paused_until() and event.is_device_event:
+            return "paused"
         fresh = self.store.insert(
             "webhook_requests", {"request_id": event.request_id, "ts": self.clock.now_ms()}, ignore=True
         )
@@ -264,6 +273,8 @@ class Ingest:
         event_id: str | None = None,
         device_id: str | None = None,
     ) -> dict[str, Any]:
+        if self.policy.paused_until():
+            raise Paused("Porchlight is paused. Resume it to read frames.")
         name, digest = self._save_frame(content, content_type)
         device_id = device_id or self.device_id
         status: str | None = None
@@ -357,8 +368,23 @@ class Ingest:
 
     async def tick(self) -> None:
         """One pass of the background loop."""
+        self.policy.delete_frames(
+            self.settings.media_dir,
+            older_than_ms=self.clock.now_ms() - self.settings.frame_retention_days * DAY_MS,
+            by="policy",
+        )
+        if self.policy.paused_until():
+            # Keep the history cursor moving so events from the pause are not replayed on resume.
+            self.mark_history_cutoff()
+            self.changed()
+            return
         try:
             if self.ring.auth_mode:
+                device_id = await self.ensure_device()
+                try:
+                    self.device_online = bool((await self.ring.device_status(device_id)).get("online"))
+                except RingError:
+                    self.device_online = None
                 await self.poll_history()
                 due = self.clock.now_ms() - self._last_porch_check_ms >= self.settings.porch_check_minutes * MINUTE_MS
                 if due and self.policy.needs_porch_check():

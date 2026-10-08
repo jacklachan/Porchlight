@@ -81,6 +81,8 @@ class Settings:
     default_collect_within_minutes: int = 180
     timezone: str = "Asia/Kolkata"
     person_name: str = "Mom"
+    # Frames older than this are deleted; the reading and its hash stay in the record.
+    frame_retention_days: int = 7
 
     # Outbound notification (optional generic webhook, POSTed a JSON alert)
     notify_webhook_url: str | None = None
@@ -139,6 +141,7 @@ class Settings:
             default_collect_within_minutes=_int("DEFAULT_COLLECT_WITHIN_MINUTES", 180),
             timezone=env("PORCHLIGHT_TIMEZONE", "Asia/Kolkata"),
             person_name=env("PORCHLIGHT_PERSON_NAME", "Mom"),
+            frame_retention_days=_int("FRAME_RETENTION_DAYS", 7),
             notify_webhook_url=env("NOTIFY_WEBHOOK_URL") or None,
             host=host,
             port=port,

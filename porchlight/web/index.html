@@ -125,8 +125,22 @@
 
         <section class="panel">
           <div class="panel-head">
+            <h2>Privacy</h2>
+            <span class="tag" id="pause-tag" hidden>Paused</span>
+          </div>
+          <p class="hint" id="privacy-note"></p>
+          <div class="chips" id="privacy-actions">
+            <button type="button" data-pause="60">Pause for 1 hour</button>
+            <button type="button" data-pause="0">Pause until I resume</button>
+            <button type="button" id="resume-btn" hidden>Resume watching</button>
+            <button type="button" id="delete-frames-btn" class="danger">Delete all frames</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
             <h2>Record</h2>
-            <span class="hint">every change, and why</span>
+            <span class="hint">every change, every look, and why</span>
           </div>
           <ol class="ledger" id="ledger"></ol>
         </section>

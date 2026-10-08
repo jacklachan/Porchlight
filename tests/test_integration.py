@@ -322,6 +322,44 @@ def test_assistant_answers_and_only_a_tap_can_approve(http):
     assert r.status_code == 400
 
 
+def test_pause_stops_watching_and_does_not_call_things_missed(http):
+    exp = expect_delivery(http)
+    assert http.post("/api/privacy/pause", json={"minutes": 60, "by": "Mom"}).status_code == 200
+    data = status(http)
+    assert data["paused_until"] and "paused" in data["headline"].lower()
+
+    # while paused: no frames are taken, by any route
+    http.post("/api/demo/scene", json={"scene": "package", "event": "motion"})
+    frame = http.get("/sim/_control/frame").content
+    assert http.post("/api/observations/frame", content=frame, headers={"content-type": "image/jpeg"}).status_code == 409
+    assert http.post("/api/porch/check").status_code == 409
+    assert http.get("/api/activity").json()["observations"] == []
+
+    http.post("/api/privacy/resume", json={"by": "Mom"})
+    data = status(http)
+    assert data["paused_until"] is None and data["alerts"] == []
+    row = http.get(f"/api/evidence/{exp['id']}").json()["subject"]
+    assert row["state"] == "cancelled" and "paused" in row["note"]
+
+
+def test_frames_can_be_deleted_and_looks_are_on_the_record(http):
+    expect_delivery(http)
+    http.post("/api/demo/scene", json={"scene": "package", "event": "motion"})
+    data = wait_for(http, lambda d: d["expectations"][0]["state"] == "arrived")
+    frame_url = data["last_observation"]["frame_url"]
+    exp_id = data["expectations"][0]["id"]
+
+    http.get(f"/api/evidence/{exp_id}", headers={"X-Porchlight-User": "Ravi"})
+    entries = http.get("/api/ledger").json()["entries"]
+    assert any(e["what"] == "evidence and frames viewed" and e["actor"] == "Ravi" for e in entries)
+
+    assert http.post("/api/privacy/delete-frames", json={"by": "Mom"}).json()["deleted"] == 1
+    assert http.get(frame_url).status_code == 404
+    data = status(http)
+    assert data["expectations"][0]["state"] == "arrived", "the record of what was seen survives"
+    assert data["last_observation"]["snapshot_sha256"] and "frame_url" not in data["last_observation"]
+
+
 def test_expired_ring_token_is_reported_not_swallowed(http):
     r = http.post("/api/ring/token", json={"token": "expired-playground-token"})
     assert r.status_code == 401 and "Ring API 401" in r.json()["detail"]

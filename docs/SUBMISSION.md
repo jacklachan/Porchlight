@@ -36,7 +36,12 @@ someone is unwell. That is the signal Porchlight is built around.
 - **MCP server for assistants:** 11 tools over Streamable HTTP. Four return MCP Apps cards. The approve
   tool has MCP Apps visibility `["app"]`, so it can be reached from a tap on the card and is never offered
   to the model.
-- **Privacy:** no face recognition and no identification; frames stay on the family's own server.
+- **Built to Ring's guidance:** the tiered vision funnel from Ring's computer vision guidelines (skip events
+  that cannot matter, set aside unusable frames, reuse the last reading when the porch has not changed,
+  call the model only for what is left), watermark-aware frame comparison, and the design guide's device,
+  empty-state and accessibility rules.
+- **Privacy:** no face recognition and no identification. The person at the door can pause watching or
+  delete every frame; frames expire after 7 days; every view of a frame is logged by name.
 
 ## What was built during the hackathon
 
