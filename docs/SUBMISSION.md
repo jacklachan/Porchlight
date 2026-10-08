@@ -7,7 +7,7 @@ Text in *[brackets]* must be replaced with the team's own experience before subm
 
 - Primary track: **Ring**
 - Also: **Alexa+** (self-hosted MCP server, Streamable HTTP, spec 2025-11-25 or later, plus a simulated host)
-- Mini challenges: **AWS Builder** (Bedrock) *[only if Bedrock was actually used in the demo]*, **Open Source** *[only once the separate contribution exists; see below]*
+- Mini challenges: **AWS Builder** (Bedrock) *[only if Bedrock was actually used in the demo]*, **Open Source** (see below)
 
 ## Tagline
 
@@ -63,12 +63,24 @@ Write this from real use. Starting points from the build are in [`FRICTION_LOG.m
 - Used for: reading frames (Converse API with image input and forced tool use); choosing tools in the assistant.
 - *[model id, latency, quota or access problems on a new account]*
 
-## Open Source mini challenge (optional, not done yet)
+## Open Source mini challenge
 
-The rules ask for a new, additional open-source project or a contribution to a public repo. One honest
-candidate: extract `porchlight/ring/` (the client, webhook verification and the local stand-in) into its
-own small package, since Ring ships no SDK. Needs: its own repo with a license, README and tests, plus the
-contribution URL, repo URL, GitHub username and a short description on the form.
+- **Contribution URL / project repository:** https://github.com/jacklachan/ring-partner-py
+- **GitHub username:** jacklachan
+- **Created:** 8 October 2026, inside the hackathon window. MIT license.
+- **What we did:** published `ring-partner`, an unofficial async Python client for the Ring Partner API,
+  extracted from Porchlight.
+- **How it works:** `RingClient` wraps device discovery, status, capabilities, paginated Event History,
+  image snapshots (following the 303 pre-signed download without forwarding the bearer token), video clips
+  with Ring's 416/425 retry guidance, and WHEP start/stop, with access-token and refresh-token sign-in.
+  `parse` and `verify_signature` handle v1.1 webhooks. `ring-partner check` reports what a token can reach.
+  `ring_partner.standin` is a local stand-in for the API (clearly not Ring) so apps can be tested with no
+  token or network. 13 tests, CI on Python 3.10 and 3.13.
+- **Why it matters:** Ring's docs state there is no official SDK, so every partner rewrites the same
+  client before starting on their product. This removes that step and gives teams outside the US, who can
+  only use the short-lived Playground token, a way to develop and test offline.
+- **Be upfront on the form:** *[state whether it has been run against the live API yet; as of 8 October it had
+  only been run against the stand-in]*
 
 ## Submission checklist
 

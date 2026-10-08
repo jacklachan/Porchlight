@@ -165,6 +165,13 @@ Both are optional and off by default.
 
 ---
 
+## Open source spin-off
+
+The Ring client, webhook verification and the local stand-in are also published on their own as
+[**ring-partner**](https://github.com/jacklachan/ring-partner-py), an unofficial Python client for the Ring
+Partner API, so other teams do not have to rewrite them. Porchlight keeps its own copy in `porchlight/ring/`
+so this repository runs with no extra install step.
+
 ## What has and has not been verified
 
 - **Verified by the test suite and by hand:** everything above, end to end, against the local stand-in.
