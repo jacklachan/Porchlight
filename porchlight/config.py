@@ -59,8 +59,12 @@ class Settings:
     # Storage
     data_dir: Path = field(default_factory=lambda: Path("data"))
 
-    # Vision: "bedrock", "fixture" (simulator frames only) or "none" (everything goes to human review)
+    # Vision: "bedrock", "openai" (any OpenAI-compatible endpoint), "fixture" (stand-in frames only)
+    # or "none" (everything goes to human review)
     vision_provider: str = "none"
+    vision_base_url: str = "https://api.openai.com/v1"
+    vision_api_key: str | None = None
+    vision_model: str = "gpt-4o-mini"
     bedrock_model_id: str = "us.amazon.nova-lite-v1:0"
     aws_region: str = "us-east-1"
     confidence_threshold: float = 0.75
@@ -120,6 +124,9 @@ class Settings:
             ring_device_id=env("RING_DEVICE_ID") or None,
             data_dir=Path(env("PORCHLIGHT_DATA_DIR", "data")),
             vision_provider=env("VISION_PROVIDER", "none").lower(),
+            vision_base_url=env("VISION_BASE_URL", "https://api.openai.com/v1"),
+            vision_api_key=env("VISION_API_KEY") or None,
+            vision_model=env("VISION_MODEL", "gpt-4o-mini"),
             bedrock_model_id=env("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
             aws_region=env("AWS_REGION", env("AWS_DEFAULT_REGION", "us-east-1")),
             confidence_threshold=_float("CONFIDENCE_THRESHOLD", 0.75),

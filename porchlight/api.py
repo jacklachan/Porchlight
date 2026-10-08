@@ -226,9 +226,10 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
         status["connection"] = ingest.connection()
         status["vision"] = {
             "provider": vision.name,
-            "model": settings.bedrock_model_id if vision.name == "bedrock" else None,
+            "model": getattr(vision, "model_id", None) or getattr(vision, "model", None),
             "threshold": settings.confidence_threshold,
         }
+        status["frame_stats"] = policy.frame_stats()
         status["demo"] = {"enabled": settings.demo, "clock_offset_minutes": clock.offset_ms // MINUTE_MS}
         status["mcp_url"] = f"{settings.base_url}/mcp"
         return status

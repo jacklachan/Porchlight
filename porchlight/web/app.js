@@ -8,7 +8,8 @@ const DAY_START_HOUR = 6;
 const DAY_END_HOUR = 22;
 
 let state = null;
-let live = { pc: null, sessionUrl: null };
+let live = { pc: null, sessionUrl: null, watchTimer: null };
+const WATCH_EVERY_MS = 20000;
 
 // ---- talking to the server ------------------------------------------------
 
@@ -97,6 +98,7 @@ function render() {
   renderCheckins();
   renderPlans();
   renderDoor();
+  renderFunnel();
   renderStandIn();
 
   const v = s.vision;
@@ -276,6 +278,7 @@ function renderDoor() {
     $("frame-cap").textContent = `${SOURCES[o.frame_source] || o.frame_source} · ${clock(o.ts)}`;
     const who = o.reviewed_by ? `confirmed by ${o.reviewed_by}` : `${o.provider}, ${Math.round(o.confidence * 100)}% sure`;
     const held = o.status === "needs_review" ? " Held for you to confirm." : "";
+    if (o.provider === "unchanged") o.provider = "same as the last frame read";
     $("reading").innerHTML = `${esc(o.summary)}${esc(held)}<span class="meta">${esc(who)} · frame <span class="mono">${esc((o.snapshot_sha256 || "").slice(0, 12))}</span></span>`;
   } else {
     img.hidden = true;
@@ -283,6 +286,18 @@ function renderDoor() {
     $("frame-cap").textContent = "";
     $("reading").textContent = "";
   }
+}
+
+function renderFunnel() {
+  const f = state.frame_stats;
+  if (!f || !f.frames) return ($("funnel").textContent = "");
+  const parts = [`${f.frames} frame${f.frames === 1 ? "" : "s"} today`];
+  if (f.read_by_model) parts.push(`${f.read_by_model} read by the model`);
+  if (f.unchanged) parts.push(`${f.unchanged} unchanged, so not sent`);
+  if (f.unusable) parts.push(`${f.unusable} unusable`);
+  if (f.confirmed_by_person) parts.push(`${f.confirmed_by_person} confirmed by a person`);
+  if (f.events_skipped) parts.push(`${f.events_skipped} event${f.events_skipped === 1 ? "" : "s"} not worth a look`);
+  $("funnel").textContent = parts.join(" · ");
 }
 
 function renderStandIn() {
@@ -368,6 +383,9 @@ async function startLive() {
 }
 
 async function stopLive() {
+  clearInterval(live.watchTimer);
+  live.watchTimer = null;
+  $("watch").checked = false;
   live.pc?.close();
   live.pc = null;
   $("live").srcObject = null;
@@ -380,19 +398,23 @@ async function stopLive() {
   if (state) renderDoor();
 }
 
-async function captureLive() {
+async function captureLive(quiet = false) {
   const video = $("live");
-  if (!video.videoWidth) return doorMessage("The live view has no picture yet.", true);
+  if (!video.videoWidth) return quiet ? null : doorMessage("The live view has no picture yet.", true);
   const canvas = document.createElement("canvas");
   const scale = Math.min(1, 1280 / video.videoWidth);
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
   canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
-  doorMessage("Reading the frame…");
+  if (!quiet) doorMessage("Reading the frame…");
   try {
     const { observation } = await api("/api/observations/frame", { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } });
-    doorMessage(observation.status === "needs_review" ? "Frame saved. It needs your confirmation above." : `Read: ${observation.summary}`);
+    const said =
+      observation.status === "needs_review" ? "Frame saved. It needs your confirmation above."
+      : observation.status === "unusable" ? observation.summary
+      : `${clock(observation.ts)}: ${observation.summary}`;
+    doorMessage(quiet ? `Watching. ${said}` : said);
     await refresh();
   } catch (err) {
     doorMessage(err.message, true);
@@ -441,7 +463,13 @@ $("look-btn").addEventListener("click", (e) =>
 );
 $("live-btn").addEventListener("click", () => (live.pc ? stopLive() : startLive()));
 $("live-stop").addEventListener("click", stopLive);
-$("capture-btn").addEventListener("click", captureLive);
+$("capture-btn").addEventListener("click", () => captureLive());
+// Keep watching: look at the live view every 20 seconds. Unchanged frames cost nothing; only a change is read.
+$("watch").addEventListener("change", (e) => {
+  clearInterval(live.watchTimer);
+  live.watchTimer = e.target.checked ? setInterval(() => captureLive(true), WATCH_EVERY_MS) : null;
+  if (e.target.checked) captureLive(true);
+});
 $("reset-btn").addEventListener("click", (e) => {
   if (confirm("Clear everything in this local stand-in session?")) act(e.currentTarget, () => api("/api/demo/reset", { method: "POST" }));
 });

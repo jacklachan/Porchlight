@@ -199,7 +199,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .frame figcaption:empty { display: none; }
 .reading { margin-top: 12px; }
 .reading .meta { display: block; color: var(--ink-2); font-size: .85rem; margin-top: 2px; }
-#live-actions { margin-top: 12px; }
+#live-actions { margin-top: 12px; align-items: center; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: .92rem; cursor: pointer; }
+#funnel { margin-top: 6px; }
 #door-msg { margin-top: 8px; min-height: 1.2em; }
 #door-msg.bad { color: var(--coral); }
 

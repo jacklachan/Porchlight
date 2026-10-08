@@ -23,13 +23,18 @@ from ..clock import MINUTE_MS, Clock
 from ..config import Settings
 from ..db import Store
 from ..ring import HistoryEvent, MediaNotReady, RingAuthError, RingClient, RingError, WebhookEvent
-from ..vision.base import VisionProvider
+from ..vision import frames
+from ..vision.base import Reading, VisionProvider
 from .policy import Policy
 
 log = logging.getLogger("porchlight.ingest")
 
 # A webhook and a history record describe the same moment under different ids.
 SAME_MOMENT_MS = 8_000
+# With nothing expected and no package out, read at most one frame in this long.
+IDLE_READ_GAP_MS = 10 * MINUTE_MS
+# A frame is only compared with a reading this recent; older than that, look again properly.
+UNCHANGED_MAX_AGE_MS = 6 * 60 * MINUTE_MS
 _HISTORY_TO_TYPE = {"motion": "motion", "ding": "ding", "on_demand": "on_demand"}
 _WEBHOOK_TO_TYPE = {"motion_detected": "motion", "button_press": "ding"}
 _EXT = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png", "image/webp": "webp"}
@@ -216,6 +221,14 @@ class Ingest:
             return None
         if self.store.one("SELECT id FROM observations WHERE event_id = ?", [event_id]):
             return None
+        skip = self._skip_reason(event)
+        if skip:
+            # Stage 0 of the funnel: decide from the event alone, before fetching or reading anything.
+            self.store.record(
+                self.clock.now_ms(), "policy", event_id, f"event not read: {skip}", rule_id="event.skipped"
+            )
+            await self.evaluate()
+            return None
         try:
             media = await self._frame_near(event["device_id"], event["ts"])
         except MediaNotReady as exc:
@@ -252,19 +265,73 @@ class Ingest:
         device_id: str | None = None,
     ) -> dict[str, Any]:
         name, digest = self._save_frame(content, content_type)
-        reading = await self.vision.read(content, content_type)
+        device_id = device_id or self.device_id
+        status: str | None = None
+        carried_from: str | None = None
+        mark = frames.fingerprint(content)
+
+        problem = frames.quality(content)
+        previous = None if problem else self._last_read_frame(device_id, ts, mark)
+        if problem:
+            # Stage 1a: an unusable frame says nothing. Set it aside; do not ask a model or a person.
+            reading = Reading(None, None, None, 0.0, f"Frame not usable: {problem}.", "gate", None, problem)
+            status = "unusable"
+        elif previous:
+            # Stage 1b: the porch looks the same as the last frame that was actually read.
+            reading = Reading(
+                previous["package_present"],
+                previous["person_present"],
+                previous["vehicle_present"],
+                previous["confidence"],
+                f"No visible change. {previous['summary']}",
+                "unchanged",
+                None,
+            )
+            status, carried_from = "trusted", previous["id"]
+        else:
+            reading = await self.vision.read(content, content_type)
         async with self._lock:
             obs = self.policy.record_observation(
                 reading,
                 ts=ts,
                 frame_source=frame_source,
                 event_id=event_id,
-                device_id=device_id or self.device_id,
+                device_id=device_id,
                 snapshot_file=name,
                 snapshot_sha256=digest,
+                fingerprint=mark,
+                carried_from=carried_from,
+                status=status,
             )
         await self.evaluate()
         return obs
+
+    def _skip_reason(self, event: dict[str, Any]) -> str | None:
+        if event["type"] in ("ding", "button_press"):
+            return None
+        if event["sub_type"] == "animal":
+            return "animal motion"
+        if self.policy.attention_window(event["ts"]):
+            return None
+        recent = self.store.one(
+            "SELECT id FROM observations WHERE provider NOT IN ('unchanged', 'gate') AND ts > ? LIMIT 1",
+            [event["ts"] - IDLE_READ_GAP_MS],
+        )
+        return "nothing expected and a frame was read in the last 10 minutes" if recent else None
+
+    def _last_read_frame(self, device_id: str | None, ts: int, mark: str | None) -> dict[str, Any] | None:
+        """The most recent trusted reading made by a model or a person, if this frame shows the same scene."""
+        if not mark:
+            return None
+        previous = self.store.one(
+            "SELECT * FROM observations WHERE status IN ('trusted', 'confirmed') AND provider != 'unchanged' "
+            "AND fingerprint IS NOT NULL AND ts <= ? AND ts >= ? AND (device_id IS ? OR device_id = ?) "
+            "ORDER BY ts DESC LIMIT 1",
+            [ts, ts - UNCHANGED_MAX_AGE_MS, device_id, device_id],
+        )
+        if previous and frames.unchanged(mark, previous["fingerprint"]):
+            return previous
+        return None
 
     async def check_porch_now(self) -> dict[str, Any]:
         """Ask Ring for the most recent frame and read it, without waiting for motion."""

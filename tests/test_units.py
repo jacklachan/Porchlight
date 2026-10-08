@@ -9,7 +9,9 @@ from porchlight.assistant import _parse_check_in
 from porchlight.mcp_server import parse_when
 from porchlight.ring import WebhookError, parse, sign, verify_signature
 from porchlight.ring.simulator import read_labels, render_scene
+from porchlight.vision import frames
 from porchlight.vision.bedrock import parse_tool_output
+from porchlight.vision.openai_compat import OpenAICompatVision, parse_json_reply
 
 MOTION = {
     "meta": {"version": "1.1", "time": "2026-02-13T13:39:57Z", "request_id": "r-1", "account_id": "ava1.ring.account.X"},
@@ -125,3 +127,48 @@ def test_bedrock_output_parsing_clamps_and_survives_bad_output():
     prose = {"output": {"message": {"content": [{"text": "I think there is a box."}]}}}
     reading = parse_tool_output(prose, "bedrock", "m")
     assert reading.package_present is None and reading.error
+
+
+def test_frame_fingerprint_ignores_recompression_but_sees_a_parcel():
+    import io
+
+    from PIL import Image
+
+    empty, package = render_scene("empty"), render_scene("package")
+    buf = io.BytesIO()
+    Image.open(io.BytesIO(package)).resize((480, 270)).save(buf, format="JPEG", quality=40)
+    assert frames.unchanged(frames.fingerprint(package), frames.fingerprint(buf.getvalue()))
+    assert not frames.unchanged(frames.fingerprint(package), frames.fingerprint(empty))
+    assert not frames.unchanged(frames.fingerprint(package), None)
+    assert frames.quality(package) is None and frames.quality(b"junk") == "not a readable image"
+
+
+def test_openai_compatible_reply_parsing():
+    fenced = """```json
+{"package_present": true, "person_present": false, "vehicle_present": false, "confidence": 0.9, "summary": "A box."}
+```"""
+    reading = parse_json_reply(fenced, "openai", "m")
+    assert reading.package_present is True and reading.confidence == 0.9
+    assert parse_json_reply("I cannot tell.", "openai", "m").error
+    assert parse_json_reply('{"package_present": "yes", "person_present": false, "vehicle_present": false, "confidence": 1}', "openai", "m").error
+
+
+async def test_openai_compatible_provider_sends_the_image_and_survives_errors():
+    import httpx
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen["auth"] = request.headers.get("authorization")
+        seen["image"] = body["messages"][0]["content"][1]["image_url"]["url"][:23]
+        reply = {"package_present": False, "person_present": True, "vehicle_present": False, "confidence": 0.8, "summary": "A person."}
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(reply)}}]})
+
+    vision = OpenAICompatVision("http://llm.test/v1", "some-model", "key", transport=httpx.MockTransport(handler))
+    reading = await vision.read(b"\xff\xd8fake", "image/jpeg")
+    assert reading.person_present is True and reading.model == "some-model"
+    assert seen == {"auth": "Bearer key", "image": "data:image/jpeg;base64,"}
+
+    down = OpenAICompatVision("http://llm.test/v1", "m", transport=httpx.MockTransport(lambda r: httpx.Response(429, text="slow down")))
+    assert "429" in (await down.read(b"x", "image/jpeg")).error

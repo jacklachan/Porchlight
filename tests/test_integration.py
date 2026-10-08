@@ -183,7 +183,7 @@ def test_browser_frame_goes_through_the_same_gate(http):
     assert obs["frame_source"] == "ring_live_view" and obs["package_present"] is False
 
     # a frame the provider cannot read is held for a person, and their answer is what counts
-    r = http.post("/api/observations/frame", content=_plain_jpeg(), headers={"content-type": "image/jpeg"})
+    r = http.post("/api/observations/frame", content=_photo_like_jpeg(), headers={"content-type": "image/jpeg"})
     held = r.json()["observation"]
     assert held["status"] == "needs_review"
     assert status(http)["expectations"][0]["state"] == "scheduled"
@@ -191,14 +191,66 @@ def test_browser_frame_goes_through_the_same_gate(http):
     assert status(http)["expectations"][0]["state"] == "arrived"
 
 
-def _plain_jpeg() -> bytes:
+def _photo_like_jpeg(seed: int = 7) -> bytes:
+    """Not a stand-in frame, but with real detail in it, so only a model or a person could read it."""
+    import io
+    import random
+
+    from PIL import Image
+
+    rng = random.Random(seed)
+    img = Image.new("L", (64, 36))
+    img.putdata([rng.randrange(40, 220) for _ in range(64 * 36)])
+    buf = io.BytesIO()
+    img.resize((640, 360)).convert("RGB").save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def test_cheap_gates_run_before_the_model(http):
     import io
 
     from PIL import Image
 
+    expect_delivery(http)
+    headers = {"content-type": "image/jpeg"}
+
+    # blank frame: set aside, nobody is asked
     buf = io.BytesIO()
-    Image.new("RGB", (64, 48), (90, 90, 90)).save(buf, format="JPEG")
-    return buf.getvalue()
+    Image.new("RGB", (640, 360), (90, 90, 90)).save(buf, format="JPEG")
+    blank = http.post("/api/observations/frame", content=buf.getvalue(), headers=headers).json()["observation"]
+    assert blank["status"] == "unusable" and blank["provider"] == "gate"
+    assert status(http)["review_queue"] == []
+
+    # first look at the porch is read by the provider
+    http.post("/api/demo/scene", json={"scene": "package", "event": None})
+    frame = http.get("/sim/_control/frame").content
+    first = http.post("/api/observations/frame", content=frame, headers=headers).json()["observation"]
+    assert first["provider"] == "fixture" and first["package_present"] is True
+
+    # same porch again: the earlier reading is carried forward, no model call
+    again = http.post("/api/observations/frame", content=frame, headers=headers).json()["observation"]
+    assert again["provider"] == "unchanged" and again["carried_from"] == first["id"]
+    assert again["package_present"] is True and again["status"] == "trusted"
+
+    # the porch changes: read properly again, and the delivery is brought in
+    http.post("/api/demo/scene", json={"scene": "empty", "event": None})
+    cleared = http.post("/api/observations/frame", content=http.get("/sim/_control/frame").content, headers=headers)
+    assert cleared.json()["observation"]["provider"] == "fixture"
+    data = status(http)
+    assert data["expectations"][0]["state"] == "completed"
+    assert data["frame_stats"]["unchanged"] == 1 and data["frame_stats"]["unusable"] == 1
+    assert data["frame_stats"]["read_by_model"] == 2
+
+
+def test_idle_events_are_not_all_read(http):
+    # nothing is expected: the first event is read (so unplanned deliveries are still noticed)...
+    http.post("/api/demo/scene", json={"scene": "vehicle", "event": "motion"})
+    wait_for(http, lambda d: d["last_observation"] is not None)
+    # ...but a second one minutes later is skipped without fetching a frame
+    http.post("/api/demo/advance", json={"minutes": 3})
+    http.post("/api/demo/scene", json={"scene": "empty", "event": "motion"})
+    data = wait_for(http, lambda d: d["frame_stats"]["events_skipped"] == 1)
+    assert data["frame_stats"]["frames"] == 1
 
 
 async def test_mcp_server_over_streamable_http(http, server):

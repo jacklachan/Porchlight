@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS observations (
     frame_source TEXT NOT NULL,
     snapshot_file TEXT,
     snapshot_sha256 TEXT,
+    fingerprint TEXT,
+    carried_from TEXT,
     provider TEXT NOT NULL,
     model TEXT,
     package_present INTEGER,
@@ -202,6 +204,16 @@ class Store:
         with self._lock:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.executescript(SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns that newer versions introduced to databases created by older ones."""
+        wanted = {"observations": {"fingerprint": "TEXT", "carried_from": "TEXT"}}
+        for table, columns in wanted.items():
+            have = {row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})")}
+            for name, kind in columns.items():
+                if name not in have:
+                    self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {kind}")
 
     def close(self) -> None:
         with self._lock:

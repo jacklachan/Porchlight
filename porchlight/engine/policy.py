@@ -27,6 +27,9 @@ TRUSTED = ("trusted", "confirmed")
 DOORBELL_TYPES = ("ding", "button_press")
 
 RULES: dict[str, str] = {
+    "frame.unusable": "The frame was too dark, blown out or blank to say anything about the porch.",
+    "frame.unchanged": "The porch looks the same as in the last frame that was read, so that reading still stands.",
+    "event.skipped": "Nothing was expected and a frame was read recently, or the motion was an animal: no model call.",
     "evidence.gate": "A reading counts only at or above the confidence threshold, or once a person confirms it.",
     "delivery.arrived": "A trusted frame shows a package inside an expected delivery window (with grace).",
     "delivery.arrived_late": "A trusted frame shows a package after the window closed, the same day.",
@@ -41,6 +44,13 @@ RULES: dict[str, str] = {
     "action.approved": "A family member approved a proposed action.",
     "action.rejected": "A family member rejected a proposed action.",
 }
+
+_RECORDED = {
+    "trusted": "observation recorded",
+    "needs_review": "observation held for review",
+    "unusable": "frame set aside as unusable",
+}
+_RECORD_RULE = {"unusable": "frame.unusable"}
 
 # Called with an alert or an approved action. May return a sentence saying where it was sent.
 Notifier = Callable[[dict[str, Any]], str | None]
@@ -207,9 +217,12 @@ class Policy:
         device_id: str | None = None,
         snapshot_file: str | None = None,
         snapshot_sha256: str | None = None,
+        fingerprint: str | None = None,
+        carried_from: str | None = None,
+        status: str | None = None,
     ) -> dict[str, Any]:
         obs_id = new_id("obs")
-        status = self.gate(reading)
+        status = status or self.gate(reading)
         now = self.clock.now_ms()
         self.store.insert(
             "observations",
@@ -221,6 +234,8 @@ class Policy:
                 "frame_source": frame_source,
                 "snapshot_file": snapshot_file,
                 "snapshot_sha256": snapshot_sha256,
+                "fingerprint": fingerprint,
+                "carried_from": carried_from,
                 "provider": reading.provider,
                 "model": reading.model,
                 "package_present": reading.package_present,
@@ -236,9 +251,9 @@ class Policy:
             now,
             f"vision:{reading.provider}",
             obs_id,
-            "observation recorded" if status == "trusted" else "observation held for review",
-            rule_id="evidence.gate",
-            evidence=[e for e in (event_id,) if e],
+            _RECORDED.get(status, "observation recorded"),
+            rule_id=_RECORD_RULE.get(status, "frame.unchanged" if carried_from else "evidence.gate"),
+            evidence=[e for e in (event_id, carried_from) if e],
             detail={
                 "confidence": reading.confidence,
                 "threshold": self.settings.confidence_threshold,
@@ -799,6 +814,40 @@ class Policy:
             [*TRUSTED, exp["arrived_at"], now],
         )
         return row["id"] if row else None
+
+    def attention_window(self, ts: int) -> bool:
+        """True when a frame at this time could matter: something is expected around now, or a package is out."""
+        early, late = self._grace()
+        if self.needs_porch_check():
+            return True
+        return bool(
+            self.store.one(
+                "SELECT id FROM expectations WHERE state IN ('scheduled', 'missed') "
+                "AND window_start - ? <= ? AND window_end + ? >= ? LIMIT 1",
+                [early, ts, late, ts],
+            )
+        )
+
+    def frame_stats(self) -> dict[str, int]:
+        """Today's funnel: how many frames arrived, and how few needed a model."""
+        start = self._day_start(self.clock.now_ms())
+        rows = self.store.query(
+            "SELECT provider, status, COUNT(*) AS n FROM observations WHERE ts >= ? GROUP BY provider, status", [start]
+        )
+        stats = {"frames": 0, "unchanged": 0, "unusable": 0, "read_by_model": 0, "confirmed_by_person": 0}
+        for row in rows:
+            stats["frames"] += row["n"]
+            if row["provider"] == "unchanged":
+                stats["unchanged"] += row["n"]
+            elif row["status"] == "unusable":
+                stats["unusable"] += row["n"]
+            elif row["provider"] not in ("none", "gate"):
+                stats["read_by_model"] += row["n"]
+            if row["status"] == "confirmed":
+                stats["confirmed_by_person"] += row["n"]
+        skipped = self.store.one("SELECT COUNT(*) AS n FROM ledger WHERE rule_id = 'event.skipped' AND ts >= ?", [start])
+        stats["events_skipped"] = skipped["n"] if skipped else 0
+        return stats
 
     def needs_porch_check(self) -> bool:
         """True while a package is out: the ingest loop then looks at the porch on a timer."""
