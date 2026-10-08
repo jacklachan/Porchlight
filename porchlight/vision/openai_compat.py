@@ -70,7 +70,7 @@ class OpenAICompatVision:
         body: dict[str, Any] = {
             "model": self.model,
             "temperature": 0,
-            "max_tokens": 300,
+            "max_tokens": 1200,  # room for models that think before answering
             "messages": [
                 {
                     "role": "user",
