@@ -192,6 +192,14 @@ a Bedrock model with `ASSISTANT_PROVIDER=bedrock`. The page says plainly that it
 
 ---
 
+## The living-room view (`/tv`)
+
+`http://127.0.0.1:8000/tv` is Porchlight at 10-foot scale: the latest frame, the one-sentence status, and
+the one thing waiting for a decision. Everything works from a remote (Left/Right to move, Select to choose),
+so a family member can approve "ask Mrs Rao to knock" from the sofa. It is a web page built for a Fire TV
+WebView app or browser. It has been tested in a desktop browser at 1280x720 with arrow keys; it has **not**
+been packaged as a Fire TV app or run on a Fire TV device or simulator.
+
 ## AWS
 
 | Service | Where | What for |

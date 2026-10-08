@@ -250,6 +250,10 @@ def create_app(settings: Settings | None = None, *, clock: Clock | None = None, 
     async def alexa_page() -> FileResponse:
         return FileResponse(WEB_DIR / "alexa.html")
 
+    @app.get("/tv", include_in_schema=False)
+    async def tv_page() -> FileResponse:
+        return FileResponse(WEB_DIR / "tv.html")
+
     @app.get("/healthz", include_in_schema=False)
     async def healthz() -> dict[str, Any]:
         return {"ok": True, "version": __version__}

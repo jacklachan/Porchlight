@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Porchlight on TV</title>
+  <!--
+    The living-room view: Porchlight at 10-foot scale for a Fire TV (in a WebView app or the browser).
+    Everything is reachable with a remote: Left/Right move between buttons, Select presses.
+    No hover, no small text, nothing that needs a pointer.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,700&display=swap" rel="stylesheet">
+  <style>
+    :root { --night:#101a2e; --panel:#1a2845; --line:#33456c; --ink:#f3f5fa; --dim:#b4bed6; --lamp:#f4ad3d; --good:#7fd1ae; --bad:#ff8f7c; --glow: var(--lamp); }
+    * { box-sizing: border-box; }
+    html { font-size: clamp(16px, 1.45vw, 30px); }
+    body { margin: 0; height: 100vh; overflow: hidden; background: var(--night); color: var(--ink); font: 1rem/1.4 "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif; padding: 5vh 5vw; display: grid; grid-template-columns: 1.1fr 1fr; grid-template-rows: auto 1fr auto; gap: 3vh 4vw; }
+    body[data-tone="attention"] { --glow:#ff9a4a; } body[data-tone="urgent"] { --glow:#ff6b55; } body[data-tone="quiet"] { --glow:#b9c3da; }
+    [hidden] { display: none !important; }
+    header { grid-column: 1 / -1; display: flex; gap: 2vw; align-items: center; }
+    .lamp { width: 4.2rem; height: 5.6rem; flex: none; position: relative; }
+    .lamp::before { content: ""; position: absolute; left: 50%; top: 52%; width: 15rem; height: 15rem; transform: translate(-50%, -50%); background: radial-gradient(circle, color-mix(in srgb, var(--glow) 50%, transparent) 0%, transparent 62%); }
+    .lamp svg { position: relative; width: 100%; height: 100%; }
+    .lamp .glass { fill: var(--glow); } .lamp path { stroke: #8c9abb; stroke-width: 2; stroke-linejoin: round; } .lamp .dark { fill: #0b1322; } .lamp .bracket { fill: none; stroke-width: 3; stroke-linecap: round; }
+    .eyebrow { color: var(--dim); font-size: .95rem; }
+    h1 { font: 700 2.7rem/1.1 "Bricolage Grotesque", system-ui, sans-serif; margin: .2rem 0 0; letter-spacing: -0.02em; text-wrap: balance; }
+    .frame { border-radius: 1.2rem; overflow: hidden; background: #0a111f; position: relative; min-height: 0; }
+    .frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .frame .cap { position: absolute; left: 1rem; bottom: 1rem; background: rgba(10,17,31,.78); padding: .3rem .9rem; border-radius: 999px; font-size: .85rem; }
+    .frame .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); padding: 2rem; text-align: center; }
+    .side { display: grid; gap: 2.4vh; align-content: start; min-height: 0; }
+    .ask { background: var(--panel); border: 1px solid var(--line); border-left: .5rem solid var(--glow); border-radius: 1.2rem; padding: 1.3rem 1.5rem; display: grid; gap: .8rem; }
+    .ask h2 { margin: 0; font-size: 1.45rem; line-height: 1.2; }
+    .ask p { margin: 0; color: var(--ink); }
+    .buttons { display: flex; gap: 1rem; margin-top: .3rem; }
+    button { font: inherit; font-weight: 700; font-size: 1.1rem; padding: .8rem 1.6rem; border-radius: .9rem; border: .2rem solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+    button.go { background: var(--good); border-color: var(--good); color: #0f2a22; }
+    button:focus { outline: none; border-color: #fff; box-shadow: 0 0 0 .35rem color-mix(in srgb, var(--lamp) 70%, transparent); transform: scale(1.04); }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
+    li { display: flex; justify-content: space-between; align-items: baseline; gap: 1.5rem; font-size: 1.2rem; }
+    li small { color: var(--dim); font-size: .85rem; display: block; }
+    .tag { font-size: .85rem; padding: .2rem .9rem; border-radius: 999px; background: #2c3b62; color: #c3c8f5; white-space: nowrap; }
+    .tag.good { background: #1f4a3d; color: var(--good); } .tag.warn { background: #5a2a25; color: var(--bad); } .tag.wait { background: #55431c; color: var(--lamp); }
+    footer { grid-column: 1 / -1; color: var(--dim); font-size: .85rem; display: flex; justify-content: space-between; }
+    @media (prefers-reduced-motion: no-preference) { button { transition: transform .12s; } }
+  </style>
+</head>
+<body data-tone="quiet">
+  <header>
+    <div class="lamp" aria-hidden="true">
+      <svg viewBox="0 0 64 88"><path class="bracket" d="M32 2v12M18 14h28"/><path class="dark" d="M20 14h24l6 14H14z"/><path class="glass" d="M16 28h32l-5 34H21z"/><path class="dark" d="M21 62h22v6H21zM27 68h10v8H27z"/></svg>
+    </div>
+    <div>
+      <div class="eyebrow" id="eyebrow">The front door</div>
+      <h1 id="headline">Checking the door…</h1>
+    </div>
+  </header>
+
+  <div class="frame">
+    <img id="frame" alt="" hidden>
+    <div class="none" id="no-frame">No frame from the door yet.</div>
+    <div class="cap" id="cap" hidden></div>
+  </div>
+
+  <div class="side">
+    <div class="ask" id="ask" hidden></div>
+    <ul id="list"></ul>
+  </div>
+
+  <footer><span id="foot-left"></span><span>Left and Right to move · Select to choose</span></footer>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const WHO = "the TV";
+let state = null;
+let shownAsk = "";
+
+function headers(extra = {}) {
+  const token = localStorage.getItem("pl_token");
+  return { "X-Porchlight-User": WHO, ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
+}
+async function api(path, body) {
+  const res = await fetch(path, body ? { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify(body) } : { headers: headers() });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+const clock = (ms) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: state.timezone }).format(ms);
+
+const STATE = {
+  scheduled: ["Expected", ""], arrived: ["On the porch", "wait"], overdue_pickup: ["Still outside", "warn"],
+  completed: ["Done", "good"], missed: ["Not seen", "warn"],
+};
+
+function render() {
+  const s = state;
+  document.body.dataset.tone = s.tone;
+  $("eyebrow").textContent = `${s.person_name}'s front door · ${clock(s.now)}`;
+  $("headline").textContent = s.headline;
+
+  const o = s.last_observation;
+  const hasFrame = !!(o && o.frame_url);
+  $("frame").hidden = !hasFrame;
+  $("no-frame").hidden = hasFrame;
+  $("cap").hidden = !hasFrame;
+  if (hasFrame) {
+    if ($("frame").getAttribute("src") !== o.frame_url) $("frame").src = o.frame_url;
+    $("frame").alt = `The door at ${clock(o.ts)}`;
+    $("cap").textContent = `${clock(o.ts)} · ${o.summary}`;
+  }
+
+  // One thing to decide at a time: a request first, otherwise the most pressing alert.
+  const request = s.proposed_actions[0];
+  const alert = s.alerts[0];
+  const key = request ? `r:${request.id}` : alert ? `a:${alert.id}` : "";
+  if (key !== shownAsk) {
+    shownAsk = key;
+    if (request) {
+      $("ask").innerHTML = `<h2>${esc(request.title)}?</h2><p>${esc(request.detail || request.reason)}</p>
+        <div class="buttons"><button class="go" data-decide="${esc(request.id)}" data-approve="1">Yes, go ahead</button>
+        <button data-decide="${esc(request.id)}" data-approve="0">Not now</button></div>`;
+    } else if (alert) {
+      $("ask").innerHTML = `<h2>${esc(alert.title)}</h2><p>${esc(alert.body)}</p>
+        <div class="buttons"><button data-ack="${esc(alert.id)}">I've seen this</button></div>`;
+    }
+    $("ask").hidden = !key;
+    $("ask").querySelector("button")?.focus();
+  }
+
+  $("list").innerHTML = s.expectations.slice(0, 5).map((e) => {
+    const [label, tone] = STATE[e.state] || [e.state, ""];
+    const when = e.arrived_at && e.state !== "completed" ? `arrived ${clock(e.arrived_at)}` : `${clock(e.window_start)} to ${clock(e.window_end)}`;
+    return `<li><span>${esc(e.title)}<small>${esc(when)}</small></span><span class="tag ${tone}">${esc(label)}</span></li>`;
+  }).join("") || `<li><span>Nothing is expected today.</span></li>`;
+
+  const c = s.connection;
+  $("foot-left").textContent = c.simulated ? "Local stand-in, not Ring" : c.device_name ? `Ring: ${c.device_name}` : "Ring is not connected";
+}
+
+async function refresh() {
+  try { state = await api("/api/status"); render(); }
+  catch (err) { $("headline").textContent = "Porchlight cannot be reached right now."; }
+}
+
+document.addEventListener("click", async (event) => {
+  const b = event.target.closest("button");
+  if (!b) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.decide) await api(`/api/actions/${b.dataset.decide}/decide`, { approve: b.dataset.approve === "1", by: WHO });
+    if (b.dataset.ack) await api(`/api/alerts/${b.dataset.ack}/ack`, { by: WHO });
+  } finally { await refresh(); }
+});
+
+// Remote control: Left/Right (and Up/Down) walk the buttons; Select is Enter, which buttons already handle.
+document.addEventListener("keydown", (event) => {
+  const buttons = [...document.querySelectorAll("button:not(:disabled)")];
+  if (!buttons.length) return;
+  const at = buttons.indexOf(document.activeElement);
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+  if (!step) return;
+  event.preventDefault();
+  buttons[(at + step + buttons.length) % buttons.length].focus();
+});
+
+refresh();
+setInterval(refresh, 10000);
+if (!localStorage.getItem("pl_token")) new EventSource("/api/stream").onmessage = refresh;
+</script>
+</body>
+</html>
