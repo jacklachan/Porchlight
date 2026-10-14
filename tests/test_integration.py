@@ -10,6 +10,8 @@ import json
 import socket
 import threading
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -98,7 +100,17 @@ def expect_delivery(http, minutes=120):
     return r.json()["expectation"]
 
 
+def start_at_6am(http):
+    """Move the stand-in clock to the next 06:00 local, so a long test day never crosses midnight."""
+    now = datetime.fromtimestamp(status(http)["now"] / 1000, ZoneInfo("Asia/Kolkata"))
+    six = now.replace(hour=6, minute=0, second=0, microsecond=0)
+    if six <= now:
+        six += timedelta(days=1)
+    http.post("/api/demo/advance", json={"minutes": max(1, int((six - now).total_seconds() // 60))})
+
+
 def test_delivery_lifecycle_through_webhook_snapshot_and_rules(http):
+    start_at_6am(http)
     exp = expect_delivery(http)
 
     fired = http.post("/api/demo/scene", json={"scene": "delivery", "event": "motion"}).json()
