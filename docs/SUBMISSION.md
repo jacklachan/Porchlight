@@ -28,7 +28,8 @@ someone is unwell. That is the signal Porchlight is built around.
 - **Ring Partner API:** device discovery, Event History polling, image snapshots (`at_timestamp` and
   `latest_in_range` through the 303 pre-signed download), HMAC-verified v1.1 webhooks, and WHEP live view
   with in-browser frame capture.
-- **A model advises, rules decide:** Amazon Bedrock reads each frame into a fixed shape (package, person,
+- **A model advises, rules decide:** a vision model (Gemini in our demo; Amazon Bedrock is supported with
+  `VISION_PROVIDER=bedrock`) reads each frame into a fixed shape (package, person,
   vehicle, confidence). Deterministic rules move each check-in. Readings under the confidence threshold are
   held until a family member confirms them. Every change is logged with its rule id and evidence ids.
 - **Nothing acts without a person:** Porchlight can propose "ask Mrs Rao to knock". It is carried out only

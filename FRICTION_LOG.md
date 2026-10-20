@@ -100,13 +100,32 @@ TODO are for the team to fill in from real Playground sessions; do not submit a 
   vision guidelines already tell apps to expect it for encrypted devices), and keep internal names out of
   the message.
 
+## 9. Playground events carry no detection type, so Package, Vehicle and Motion look the same
+
+- **Task:** tell a package delivery apart from a passing car or plain motion using Event History on the Playground device.
+- **Steps:** fresh Playground token; opened a live view; triggered the Playground's **Package** stream; polled Event History.
+- **Expected:** an event whose type or subtype says "package" (or at least "motion" with a detection subtype), matching the stream that was triggered.
+- **Actual:** the event arrived as `event_type: on_demand` with no detection subtype or other detail. Events only appeared at all while a live view was open (8 October 2026).
+- **Severity:** Medium. An app cannot test its event filtering on the Playground, and the "skip events that cannot matter" tier from Ring's computer vision guidelines has nothing to filter on, so every Playground event costs a model call.
+- **Workaround:** treat `on_demand` as "look at the frame" and let our own vision step decide what is on the porch.
+- **Suggestion:** have each Playground stream emit the event type and subtype a real device would send for that scene, and say on the Playground page whether events require an open live view.
+
+## 10. Playground live view connects but sends no video, and nothing says so
+
+- **Task:** open a live view on the Playground device to get frames for a simulated Package delivery.
+- **Steps:** fresh Playground token; `POST .../media/streaming/whep/sessions` with a browser SDP offer; also tried the Playground's own "Live Stream: package" player, one session at a time (20 October 2026, about 21:45 IST).
+- **Expected:** video on the stream, or an error if the device cannot stream.
+- **Actual:** `201 Created` with an SDP answer (H.264, `sendonly`); ICE and DTLS both reach "connected"; then zero RTP packets for over 20 seconds. The Playground's own player stayed black and then showed "Stream ended". Snapshots for the `on_demand` events those sessions created then returned `416 No media found in time range`.
+- **Severity:** High for the session. Every step reports success, so a developer spends time debugging their WebRTC code, firewall and network before suspecting the Playground.
+- **Workaround:** read `getStats()` in the browser: a connected transport with no `inbound-rtp` report means the far side is not sending. Then stop and try again later.
+- **Suggestion:** a Playground status line (stream up or down), and end a WHEP session with an error, or reject the POST, when the device has no media to send.
+
 ---
 
 ## TODO (fill in from real Playground sessions)
 
 - **Playground token lifetime.** Did the ~30 minute expiry interrupt a session? How did the API report it (status code, error body)? Was the dashboard's "Ring needs a new token" state enough?
 - **Image download on the Playground device.** Does `at_timestamp` return a frame for a simulated Package / Vehicle / Motion event? Does `latest_in_range` work with no recent event? Record the exact status and error code if not.
-- **Event History on the Playground.** Confirmed 8 Oct: the Package stream shows up as `event_type: on_demand` with no detection subtype, so an app cannot tell Package from Vehicle from Motion without its own vision. Write this up as an entry.
 - **WHEP live view.** Did the browser offer produce an answer first time? Any 500s?
 - **Bedrock.** Model access, quotas on a new account, latency per frame.
 - **Onboarding.** Time from "open developer.ring.com" to first successful API call.
