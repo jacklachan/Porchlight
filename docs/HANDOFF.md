@@ -71,8 +71,10 @@ macOS or Linux:
 .venv\Scripts\python -m porchlight --demo
 ```
 
-Open http://127.0.0.1:8000 and use the "Stand-in controls" panel. This mode is for development only.
-**It must not appear in the demo video**; the rules require real Ring or the Playground.
+Open http://127.0.0.1:8000 and use the "Stand-in controls" panel. Keep the video mostly on the real
+Playground, but a labelled stand-in shot is allowed: the organizers said on the forum (20 Oct check) that a
+team's own simulator is fine "because you're still using a substantial amount of the actual Ring tech"
+([thread](https://amazonappdev2026.devpost.com/forum_topics/45511-ring-track-does-simulator-include-one-i-wrote-myself)).
 
 **Run it against real Ring:**
 
@@ -111,9 +113,9 @@ Tests: `.venv\Scripts\python -m pytest -q`
 
 1. **One more live pass** to confirm the three untested fixes above. About 45 minutes including the wait.
 2. **Record the demo video** (under 3 minutes, public on YouTube or Vimeo, English). Shot list is in
-   `docs/DEMO.md`. Before recording, check the forum thread "Playground questions: demo video and offline
-   device": another team asked whether Ring-branded footage may appear in a public video, and it was
-   unanswered when we last looked.
+   `docs/DEMO.md`. Ring-branded Playground footage is allowed in the public video if labelled as simulated
+   (organizer answer, [thread](https://amazonappdev2026.devpost.com/forum_topics/45541-ring-playground-replay-mode-for-judging-ring-media-in-public-videos-and-simulated-alexa-wording)).
+   The stand-in's clock control may be used for the "still on the porch" shot if it is labelled.
 3. **Finish the friction log.** Replace the TODO section with entries from your own sessions, or delete it.
    Good candidates we already saw: the Playground event arrives as `on_demand` with no detail, and tokens
    expire mid-session. It is worth up to a 10% judging bonus.
